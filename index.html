@@ -102,6 +102,11 @@ pre.stream{white-space:pre-wrap;max-height:140px;overflow:auto;background:#f3efe
 aside#side{width:300px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
 aside#side.hidden{display:none}
 #side .tabs{display:flex;gap:4px;padding:10px 10px 0}
+.closeX{display:none;border:none;background:transparent;font-size:18px;padding:4px 8px;flex:none!important}
+.libTop{display:flex;align-items:center;gap:8px}
+.libTop .primary{flex:1}
+#backdrop{position:fixed;inset:0;background:rgba(30,25,15,.3);z-index:25;display:none}
+#backdrop.show{display:block}
 #side .tabs button{flex:1}
 #side .body{flex:1;overflow:auto;padding:12px}
 #notes{width:100%;min-height:220px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--paper);line-height:1.5}
@@ -169,6 +174,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 @media (max-width:900px){
     aside#lib{position:fixed;z-index:30;top:0;bottom:0;left:0;transform:translateX(-100%);transition:transform .2s;box-shadow:var(--shadow)}
   body.libOpen aside#lib{transform:none}
+  .closeX{display:inline-block}
   #menuBtn{display:inline-block}
   aside#side:not(.hidden){display:flex;position:fixed;z-index:30;right:0;top:0;bottom:0;box-shadow:var(--shadow)}
   #scroller{padding:10px}
@@ -188,7 +194,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 <div class="main">
   <aside id="lib">
     <div class="head">
-      <button class="primary" id="addBtn">+ Add sheet music</button>
+      <div class="libTop"><button class="primary" id="addBtn">+ Add sheet music</button><button class="closeX" id="libClose" title="Close">✕</button></div>
       <input type="file" id="fileIn" accept=".musicxml,.xml,.mxl,.pdf,image/*" hidden>
     </div>
     <div id="pieceList"></div>
@@ -246,6 +252,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 
   <aside id="side" class="hidden">
     <div class="tabs">
+      <button class="closeX" id="sideClose" title="Close">✕</button>
       <button data-tab="notes" class="on">Practice notes</button>
       <button data-tab="ask">Ask Claude</button>
     </div>
@@ -321,6 +328,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   </div>
 </footer>
 
+<div id="backdrop"></div>
 <div id="setModal" class="modalBg"><div class="card">
   <h3>Use your own Claude API key</h3>
   <p class="small">Outside of Claude, Practice Room can still read notes from PDFs and photos and answer questions if you give it an Anthropic API key. Get one at <a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a>. Usage is billed to your Anthropic account. Reading a page of music costs roughly a few cents to a quarter.</p>
@@ -523,7 +531,7 @@ $("#pieceList").addEventListener("click", async e=>{
     if(!await confirmBox("Delete this piece?", `“${p.title||"Untitled"}” and all its markings will be removed for good.`, "Delete")) return;
     await deletePiece(p); return;
   }
-  document.body.classList.remove("libOpen");
+  setLib(false);
   openPiece(p);
 });
 async function deletePiece(p){
@@ -561,6 +569,7 @@ function guessTitle(xml, fallback){
   return fallback;
 }
 async function addFile(file){
+  setLib(false);
   const name=file.name||"Untitled"; const base=name.replace(/\.[^.]+$/,"");
   const ext=(name.split(".").pop()||"").toLowerCase();
   let kind, content;
@@ -1146,9 +1155,17 @@ window.addEventListener("resize",()=>sizeStage());
 new ResizeObserver(()=>sizeStage()).observe($("#scaled"));
 
 /* side panel */
-$("#sideBtn").onclick=()=>{ $("#side").classList.toggle("hidden"); $("#sideBtn").classList.toggle("on",!$("#side").classList.contains("hidden")); setTimeout(sizeStage,0); };
+function setSide(open){ $("#side").classList.toggle("hidden",!open); $("#sideBtn").classList.toggle("on",open); updateBackdrop(); setTimeout(sizeStage,0); }
+function setLib(open){ document.body.classList.toggle("libOpen",open); updateBackdrop(); }
+function updateBackdrop(){ const narrow=window.innerWidth<900; const open=document.body.classList.contains("libOpen") || !$("#side").classList.contains("hidden"); $("#backdrop").classList.toggle("show", narrow && open); }
+$("#sideBtn").onclick=()=>setSide($("#side").classList.contains("hidden"));
+$("#sideClose").onclick=()=>setSide(false);
+$("#libClose").onclick=()=>setLib(false);
+$("#backdrop").onclick=()=>{ setLib(false); if(window.innerWidth<900) setSide(false); };
+window.addEventListener("resize",updateBackdrop);
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ setLib(false); if(window.innerWidth<900) setSide(false); $("#setModal").classList.remove("show"); } });
 $("#side .tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; $$("#side .tabs button").forEach(x=>x.classList.toggle("on",x===b)); $("#tab-notes").style.display=b.dataset.tab==="notes"?"":"none"; $("#tab-ask").style.display=b.dataset.tab==="ask"?"":"none"; });
-$("#menuBtn").onclick=()=>document.body.classList.toggle("libOpen");
+$("#menuBtn").onclick=()=>setLib(!document.body.classList.contains("libOpen"));
 
 /* ===================== audio + player ===================== */
 const Audio_ = { ctx:null, master:null, comp:null };
