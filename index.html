@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Practice Room">
@@ -25,7 +26,8 @@
   --radius:10px; --shadow:0 1px 2px rgba(40,30,10,.08),0 6px 24px rgba(40,30,10,.08);
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
 body{font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;display:flex;flex-direction:column;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:6px 10px;line-height:1.2}
@@ -40,14 +42,14 @@ h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:650;margin:0}
 .small{font-size:12px}
 
 /* top bar */
-header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line);background:var(--panel)}
 header h1{font-size:20px;letter-spacing:-.01em}
 header .title{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px}
 #pieceTitle{font-family:Fraunces,Georgia,serif;font-size:17px;font-weight:500;border:1px solid transparent;background:transparent;border-radius:6px;padding:2px 6px;min-width:0;width:100%;max-width:460px;text-overflow:ellipsis}
 #pieceTitle:hover{border-color:var(--line)}
 #pieceTitle:focus{outline:none;border-color:var(--teal);background:#fff}
 #saveState{white-space:nowrap}
-#menuBtn{display:none}
+@media (min-width:901px){ body.libHidden aside#lib{display:none} }
 
 /* layout */
 .main{flex:1;display:flex;min-height:0}
@@ -83,7 +85,7 @@ body.annotating #annTools{display:inline-flex}
 .sheet>canvas.page{display:block;width:960px}
 .sheet canvas.ann{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 body.annotating .sheet canvas.ann{pointer-events:auto;cursor:crosshair}
-body.annotating.pencilOnly .sheet canvas.ann{touch-action:pan-x pan-y pinch-zoom}
+body.annotating.pencilOnly .sheet canvas.ann{touch-action:pan-x pan-y}
 body.annotating.tool-eraser .sheet canvas.ann{cursor:cell}
 body.annotating.tool-text .sheet canvas.ann{cursor:text}
 #osmdBox{width:960px;padding:10px 0 30px}
@@ -120,7 +122,7 @@ aside#side.hidden{display:none}
 #askA p{margin:6px 0}
 
 /* transport */
-footer{border-top:1px solid var(--line);background:var(--panel)}
+footer{border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom)}
 .transport{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 12px}
 #playBtn{width:44px;height:36px;font-size:16px}
 .grp{display:flex;align-items:center;gap:6px}
@@ -186,7 +188,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <button id="menuBtn" title="Library">☰</button>
+  <button id="menuBtn" title="Show or hide your library">☰</button>
   <h1>Practice Room</h1>
   <div class="title"><input id="pieceTitle" placeholder="No piece open" disabled></div>
   <span id="saveState" class="muted small"></span>
@@ -1104,6 +1106,8 @@ function bindSurface(s){
   const pt=e=>{ const r=c.getBoundingClientRect(); return [(e.clientX-r.left)*960/r.width, (e.clientY-r.top)*s.h/r.height]; };
   c.addEventListener("pointerdown",e=>{
     if(S.mode!=="annotate") return;
+    if(e.pointerType==="touch" && document.body.classList.contains("pencilOnly")) return; // finger scrolls, Pencil draws
+    if(e.pointerType==="touch"){ S.touchPts=(S.touchPts||0)+1; if(S.touchPts>1){ s.live=null; s.erasing=false; drawSurface(s); return; } }
     e.preventDefault();
     const [x,y]=pt(e);
     if(S.tool==="text"){ startText(s,x,y); return; }
@@ -1114,12 +1118,15 @@ function bindSurface(s){
   });
   c.addEventListener("pointermove",e=>{
     if(S.mode!=="annotate") return;
+    if(S.touchPts>1){ if(s.live){ s.live=null; drawSurface(s); } return; } // two fingers = pinch, not drawing
     const [x,y]=pt(e);
     if(s.erasing){ eraseAt(s,x,y); return; }
     if(!s.live) return;
     const p=s.live.p; if(Math.hypot(p[p.length-2]-x,p[p.length-1]-y)<1.5) return;
     p.push(+x.toFixed(1),+y.toFixed(1)); drawSurface(s);
   });
+  const lift=e=>{ if(e.pointerType==="touch") S.touchPts=Math.max(0,(S.touchPts||0)-1); };
+  c.addEventListener("pointerup",lift); c.addEventListener("pointercancel",lift);
   const end=()=>{
     if(s.erasing){ s.erasing=false; return; }
     if(!s.live) return;
@@ -1184,6 +1191,31 @@ function sizeStage(){
   $("#zoomLbl").textContent=Math.round(S.zoom*100)+"%";
 }
 function setZoom(z){ S.zoom=Math.max(.5,Math.min(2.5,z)); sizeStage(); S.surfaces.forEach(s=>{ sizeSurface(s); drawSurface(s); }); }
+// pinch with two fingers on the music to zoom just the music (not the whole page)
+(function(){
+  const sc=$("#scroller"); let pinch=null;
+  const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+  const mid=t=>({x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2});
+  sc.addEventListener("touchstart",e=>{
+    if(e.touches.length!==2) return;
+    S.surfaces.forEach(s=>{ if(s.live){ s.live=null; drawSurface(s); } s.erasing=false; });
+    const r=sc.getBoundingClientRect(), m=mid(e.touches);
+    pinch={d0:dist(e.touches), z0:S.zoom, cx:(sc.scrollLeft+m.x-r.left)/S.scale, cy:(sc.scrollTop+m.y-r.top)/S.scale};
+  },{passive:true});
+  sc.addEventListener("touchmove",e=>{
+    if(!pinch||e.touches.length!==2) return;
+    e.preventDefault();
+    const z=Math.max(.5,Math.min(2.5,pinch.z0*dist(e.touches)/pinch.d0));
+    S.zoom=z; sizeStage();
+    const r=sc.getBoundingClientRect(), m=mid(e.touches);
+    sc.scrollLeft=pinch.cx*S.scale-(m.x-r.left); sc.scrollTop=pinch.cy*S.scale-(m.y-r.top);
+  },{passive:false});
+  const end=e=>{ if(pinch && e.touches.length<2){ pinch=null; setZoom(S.zoom); } };
+  sc.addEventListener("touchend",end); sc.addEventListener("touchcancel",end);
+  // stop Safari from zooming the whole app
+  ["gesturestart","gesturechange","gestureend"].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
+  document.addEventListener("dblclick",e=>{ if(!e.target.closest("input,textarea")) e.preventDefault(); },{passive:false});
+})();
 $("#zoomIn").onclick=()=>setZoom(S.zoom+.15); $("#zoomOut").onclick=()=>setZoom(S.zoom-.15);
 window.addEventListener("resize",()=>sizeStage());
 new ResizeObserver(()=>sizeStage()).observe($("#scaled"));
@@ -1199,10 +1231,25 @@ $("#backdrop").onclick=()=>{ setLib(false); if(window.innerWidth<900) setSide(fa
 window.addEventListener("resize",updateBackdrop);
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ setLib(false); if(window.innerWidth<900) setSide(false); $("#setModal").classList.remove("show"); } });
 $("#side .tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; $$("#side .tabs button").forEach(x=>x.classList.toggle("on",x===b)); $("#tab-notes").style.display=b.dataset.tab==="notes"?"":"none"; $("#tab-ask").style.display=b.dataset.tab==="ask"?"":"none"; });
-$("#menuBtn").onclick=()=>setLib(!document.body.classList.contains("libOpen"));
+$("#menuBtn").onclick=()=>{
+  if(window.innerWidth<900){ setLib(!document.body.classList.contains("libOpen")); return; }
+  const hide=!document.body.classList.contains("libHidden");
+  document.body.classList.toggle("libHidden",hide); pref("libhidden",hide?"1":"0"); setTimeout(()=>{ sizeStage(); },0);
+};
+if(pref("libhidden")==="1") document.body.classList.add("libHidden");
 
 /* ===================== audio + player ===================== */
 const Audio_ = { ctx:null, master:null, comp:null };
+// iPad/iPhone: play through the media channel (not muted by silent mode) and unlock audio on the first touch
+function unlockAudio(){
+  try{ if(navigator.audioSession && navigator.audioSession.type!=="playback") navigator.audioSession.type="playback"; }catch(e){}
+  try{
+    const ctx=audio();
+    const b=ctx.createBuffer(1,1,22050), src=ctx.createBufferSource(); src.buffer=b; src.connect(ctx.destination); src.start(0);
+    if(ctx.state==="running"){ ["touchend","click","keydown"].forEach(ev=>document.removeEventListener(ev,unlockAudio,true)); }
+  }catch(e){}
+}
+["touchend","click","keydown"].forEach(ev=>document.addEventListener(ev,unlockAudio,true));
 function audio(){
   if(!Audio_.ctx){
     const ctx=new (window.AudioContext||window.webkitAudioContext)();
