@@ -356,6 +356,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   <h3>Use your own Claude API key</h3>
   <p class="small">Outside of Claude, Practice Room can still read notes from PDFs and photos and answer questions if you give it an Anthropic API key. Get one at <a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a>. Usage is billed to your Anthropic account. Reading a page of music costs roughly a few cents to a quarter.</p>
   <p class="small">The key is stored only in this browser on this device and is sent only to Anthropic.</p>
+  <p class="small muted">App version <span id="verLbl"></span></p>
   <input id="keyIn" type="password" placeholder="sk-ant-..." autocomplete="off" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--paper)">
   <p id="keyStatus" class="small muted"></p>
   <div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button id="keyRemove">Remove key</button><button id="keyClose">Close</button><button class="primary" id="keySave">Save</button></div>
@@ -364,6 +365,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 
 <script>
 "use strict";
+const APP_VERSION="2026.11.07-6";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1650,7 +1652,7 @@ function makeApiSample(key){
   f.limits=async()=>({images:true});
   return f;
 }
-function openSettings(){ $("#keyIn").value=pref("apikey")||""; $("#keyStatus").textContent=pref("apikey")?"A key is saved on this device.":""; $("#setModal").classList.add("show"); }
+function openSettings(){ $("#verLbl").textContent=APP_VERSION; $("#keyIn").value=pref("apikey")||""; $("#keyStatus").textContent=pref("apikey")?"A key is saved on this device.":""; $("#setModal").classList.add("show"); }
 $("#setBtn").onclick=openSettings;
 $("#keyClose").onclick=()=>$("#setModal").classList.remove("show");
 $("#keySave").onclick=async()=>{
@@ -1931,11 +1933,27 @@ $("#autoGo").onclick=async()=>{
   btn.disabled=false;
 };
 
+/* ===================== updates (GitHub copy) ===================== */
+// Home Screen apps keep an old copy of the page; check for a newer one and offer a one-tap reload.
+async function checkForUpdate(){
+  if(window.claude) return;
+  try{
+    const r=await fetch(location.pathname+"?check="+Date.now(),{cache:"no-store"}); if(!r.ok) return;
+    const m=(await r.text()).match(/APP_VERSION="([^"]+)"/);
+    if(m && m[1]!==APP_VERSION){
+      const n=$("#notice"); n.innerHTML='A new version of Practice Room is ready. <button id="updBtn" class="primary" style="margin-left:8px">Update now</button>'; n.classList.add("show");
+      $("#updBtn").onclick=()=>location.replace(location.pathname+"?v="+encodeURIComponent(m[1]));
+    }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkForUpdate(); });
+
 /* ===================== boot ===================== */
 setMode("play"); document.body.classList.add("tool-pen");
 updateTransport();
 (async()=>{
   await Store.init();
+  checkForUpdate();
   await loadLibrary();
 })();
 </script>
