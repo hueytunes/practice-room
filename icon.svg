@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cc6a40"/><stop offset="1" stop-color="#9c421e"/></linearGradient>
+    <linearGradient id="wk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efe7d8"/><stop offset=".18" stop-color="#fffaf0"/></linearGradient>
+    <linearGradient id="lit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d8286"/><stop offset="1" stop-color="#5aa3a6"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- keyboard case -->
+  <rect x="58" y="286" width="396" height="170" rx="22" fill="#3a2a1d"/>
+  <rect x="70" y="298" width="372" height="6" fill="#8c2323"/>
+  <!-- white keys -->
+  <g>
+    <path d="M72 304h68v126a12 12 0 0 1-12 12H84a12 12 0 0 1-12-12z" fill="url(#wk)"/>
+    <path d="M146 304h68v126a12 12 0 0 1-12 12h-44a12 12 0 0 1-12-12z" fill="url(#wk)"/>
+    <path d="M220 304h68v126a12 12 0 0 1-12 12h-44a12 12 0 0 1-12-12z" fill="url(#lit)"/>
+    <path d="M294 304h68v126a12 12 0 0 1-12 12h-44a12 12 0 0 1-12-12z" fill="url(#wk)"/>
+    <path d="M368 304h72v126a12 12 0 0 1-12 12h-48a12 12 0 0 1-12-12z" fill="url(#wk)"/>
+  </g>
+  <!-- black keys -->
+  <g fill="#1f1a16">
+    <rect x="118" y="304" width="46" height="84" rx="6"/>
+    <rect x="192" y="304" width="46" height="84" rx="6"/>
+    <rect x="340" y="304" width="46" height="84" rx="6"/>
+  </g>
+  <!-- beamed eighth notes -->
+  <g fill="#fff6e6">
+    <ellipse cx="190" cy="226" rx="38" ry="28" transform="rotate(-22 190 226)"/>
+    <ellipse cx="338" cy="198" rx="38" ry="28" transform="rotate(-22 338 198)"/>
+    <rect x="212" y="78" width="16" height="148"/>
+    <rect x="360" y="50" width="16" height="148"/>
+    <path d="M212 70 L376 42 L376 80 L212 108 Z"/>
+  </g>
+</svg>
