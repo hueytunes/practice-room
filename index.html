@@ -195,7 +195,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   <aside id="lib">
     <div class="head">
       <div class="libTop"><button class="primary" id="addBtn">+ Add sheet music</button><button class="closeX" id="libClose" title="Close">✕</button></div>
-      <input type="file" id="fileIn" accept=".musicxml,.xml,.mxl,.pdf,image/*" hidden>
+      <input type="file" id="fileIn" accept=".musicxml,.xml,.mxl,.zip,.pdf,image/*" hidden>
     </div>
     <div id="pieceList"></div>
     <div id="storageNote">Connecting…</div>
@@ -574,7 +574,7 @@ async function unzipMxl(buf){
   const cont = zip.file("META-INF/container.xml");
   if(cont){ const m=(await cont.async("string")).match(/full-path="([^"]+)"/); if(m) path=m[1]; }
   if(!path){ path = Object.keys(zip.files).find(n=>!n.startsWith("META-INF") && /\.(xml|musicxml)$/i.test(n)); }
-  if(!path) throw new Error("No score found inside the .mxl file.");
+  if(!path) throw new Error("No score found inside that file.");
   return await zip.file(path).async("string");
 }
 function guessTitle(xml, fallback){
@@ -592,11 +592,11 @@ async function addFile(file){
   const ext=(name.split(".").pop()||"").toLowerCase();
   let kind, content;
   try{
-    if(ext==="mxl"){ kind="xml"; content=await unzipMxl(await file.arrayBuffer()); }
+    if(ext==="mxl"||ext==="zip"){ kind="xml"; content=await unzipMxl(await file.arrayBuffer()); }
     else if(ext==="musicxml"||ext==="xml"){ kind="xml"; content=await file.text(); if(!/score-(partwise|timewise)/.test(content)) throw new Error("That XML file doesn't look like MusicXML."); }
     else if(ext==="pdf"||file.type==="application/pdf"){ kind="pdf"; content=file; }
     else if(file.type.startsWith("image/")){ if(/hei[cf]/i.test(file.type+ext)) throw new Error("HEIC photos can't be opened in the browser. Export it as JPEG or PNG first."); kind="img"; content=file; }
-    else throw new Error("Use a MusicXML (.musicxml, .mxl), PDF, or image file.");
+    else throw new Error("Use a MusicXML (.musicxml, .mxl, or a .zip saved from Practice Room), PDF, or image file.");
   }catch(e){ notice(e.message||"Couldn't read that file."); return; }
   notice("");
   const p = { id:uidGen(), title: kind==="xml"?guessTitle(content,base):base, kind, fileName:name, notes:"", tempoPct:100, createdAt:Date.now(), updatedAt:Date.now(), annKeys:[] };
@@ -1628,7 +1628,23 @@ $("#exportBtn").onclick=async()=>{
   const xml=currentXML(); if(!xml) return;
   const filename=((S.cur.title||"score").replace(/[\\/:*?"<>|]+/g,"").trim()||"score")+".musicxml";
   const dl=await useCap("downloads");
-  if(dl){ try{ await dl.save({filename,data:xml}); }catch(e){ if(e?.code!=="declined") notice("Couldn't save the file."); } return; }
+  if(dl){
+    // Claude only saves certain file types, so the score goes inside a .zip (the same layout as a compressed .mxl file)
+    try{
+      const zip=new JSZip();
+      zip.file("META-INF/container.xml",'<?xml version="1.0" encoding="UTF-8"?><container><rootfiles><rootfile full-path="score.musicxml" media-type="application/vnd.recordare.musicxml+xml"/></rootfiles></container>');
+      zip.file("mimetype","application/vnd.recordare.musicxml");
+      zip.file("score.musicxml",xml);
+      const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
+      await dl.save({filename:filename.replace(/\.musicxml$/,".zip"),data:blob});
+      notice("Saved. Add the .zip file in the other copy of Practice Room as is; it opens directly.");
+      setTimeout(()=>notice(""),8000);
+    }catch(e){
+      if(e?.code==="declined") return;
+      notice("Couldn't save the file"+(e?.message?": "+e.message:"")+".");
+    }
+    return;
+  }
   if(window.claude){ notice("Downloads aren't available in this view."); return; }
   const url=URL.createObjectURL(new Blob([xml],{type:"application/vnd.recordare.musicxml+xml"}));
   const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();

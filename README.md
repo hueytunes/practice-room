@@ -28,4 +28,4 @@ On iPad, open that link in Safari, tap Share, then "Add to Home Screen." Safari 
 On this site, there are two ways to make a PDF or photo playable:
 
 - **Your own API key:** tap Settings, paste an Anthropic API key (from console.anthropic.com), and the app can read notes and answer questions here. The key stays in your browser on that device, and usage is billed to your Anthropic account.
-- **The Claude version:** read the notes in the Claude-hosted copy of the app, tap "Download MusicXML," and add that file here.
+- **The Claude version:** read the notes in the Claude-hosted copy of the app, tap "Download MusicXML," and add the .zip file it saves here (no need to unzip it).
