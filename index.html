@@ -334,7 +334,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   <h3>Annotate for me</h3>
   <p class="small muted" id="autoIntro">Pick what to add to the score. These are regular markings, so you can erase any of them.</p>
   <div id="autoOpts" style="display:flex;flex-direction:column;gap:8px;margin:12px 0">
-    <label><input type="checkbox" data-k="names" checked> <b>Note names</b> <span class="small muted">under every note</span></label>
+    <label><input type="checkbox" data-k="names" checked> <b>Key names</b> <span class="small muted">above every note, like E4 or F♯5 (C4 is middle C)</span></label>
     <label><input type="checkbox" data-k="count" checked> <b>Counting</b> <span class="small muted">beat numbers above each bar (1 &amp; 2 &amp;)</span></label>
     <label class="needsAI"><input type="checkbox" data-k="fingers" checked> <b>Fingering</b> <span class="small muted">suggested finger numbers for both hands</span></label>
     <label class="needsAI"><input type="checkbox" data-k="tips" checked> <b>Tricky spots</b> <span class="small muted">boxes around the hardest bars, with a practice tip</span></label>
@@ -1636,9 +1636,14 @@ $("#exportBtn").onclick=async()=>{
 const LETTERS={0:"C",2:"D",4:"E",5:"F",7:"G",9:"A",11:"B"};
 const ACC={"-2":"𝄫","-1":"♭","0":"","1":"♯","2":"𝄪"};
 function spell(n){
-  try{ const p=n.Pitch; const L=LETTERS[p.FundamentalNote]; if(L) return L+(ACC[String(Math.round(p.AccidentalHalfTones))]??""); }catch(e){}
-  return NOTE_NAMES[(n.halfTone+12)%12];
+  // letter + accidental as written, + octave (C4 = middle C, same as the app's piano)
+  try{ const p=n.Pitch; const L=LETTERS[p.FundamentalNote]; if(L) return L+(ACC[String(Math.round(p.AccidentalHalfTones))]??"")+(p.Octave+3); }catch(e){}
+  const m=n.halfTone+12; return NOTE_NAMES[m%12]+(Math.floor(m/12)-1);
 }
+const NAME_ROW=11;
+function nameRows(b){ return Math.max(1,...b.entries.map(e=>e.notes.filter(n=>!n.cont).length)); }
+// y of the counting row above a staff: above the note names when they are shown
+function countY(b,withNames){ return Math.min(b.top,b.hi) - (withNames ? 9+nameRows(b)*NAME_ROW+4 : 12); }
 // Read the engraved score: every note's position on the page, grouped by bar and staff.
 function scoreLayout(){
   const osmd=S.osmd; const svg=$("#osmdBox svg"); if(!osmd||!svg) return null;
@@ -1678,10 +1683,11 @@ function scoreLayout(){
 function centerX(n,L){ return n.x+L.u*.62; }
 function autoNames(L,out){
   for(const b of L.bars){
+    const y0=Math.min(b.top,b.hi)-9; // just above the staff (and above any high notes)
     for(const e of b.entries){
-      const ns=e.notes.filter(n=>!n.cont).sort((a,c)=>c.midi-a.midi); if(!ns.length) continue;
-      const y0=Math.max(b.bot, b.lo)+11;
-      ns.forEach((n,i)=>out.push({t:"lbl",x:+centerX(n,L).toFixed(1),y:+(y0+i*11).toFixed(1),v:n.name,c:"#4b5b70",s:10.5,w:600,auto:"names"}));
+      const ns=e.notes.filter(n=>!n.cont).sort((a,c)=>a.midi-c.midi); if(!ns.length) continue;
+      // lowest note's name sits nearest the staff, higher notes stack upward, like the chord itself
+      ns.forEach((n,i)=>out.push({t:"lbl",x:+centerX(n,L).toFixed(1),y:+(y0-i*NAME_ROW).toFixed(1),v:n.name,c:b.si===1?"#9a4a24":"#24585b",s:10.5,w:600,auto:"names"}));
     }
   }
 }
@@ -1706,7 +1712,7 @@ function autoCount(L,out){
       if(!a) return uniq[0].x;
       const nx=c?c.x:endX, nt=c?c.ts:b.len; return a.x+(nx-a.x)*((t-a.ts)/Math.max(1e-6,nt-a.ts));
     };
-    const y=Math.min(b.top, b.hi)-12;
+    const y=countY(b,L.withNames);
     for(let k=0;k<b.num_*sub;k++){
       const tAbs=k*beat/sub; const t=tAbs-off; if(t<-1e-6 || t>=b.len-1e-6) continue;
       const bi=Math.floor(k/sub), si=k%sub;
@@ -1760,11 +1766,10 @@ ${chunks[i]}`;
     const lh = hands && n0.si===1;
     g.sort((a,c)=>c.n.midi-a.n.midi); // top note first
     if(!lh){
-      const base=Math.min(b.top,b.hi)-26; // above the counting row
+      const base=countY(b,L.withNames)-14; // above the counting row
       g.forEach((x,i)=>out.push({t:"lbl",x:+centerX(x.n,L).toFixed(1),y:+(base-(g.length-1-i)*12).toFixed(1),v:String(x.f),c:"#1f6fb2",s:12,w:700,auto:"fingers"}));
     } else {
-      const namesRows=Math.max(1,...b.entries.map(e=>e.notes.filter(n=>!n.cont).length));
-      const base=Math.max(b.bot,b.lo)+11+namesRows*11+6;
+      const base=Math.max(b.bot,b.lo)+12;
       g.forEach((x,i)=>out.push({t:"lbl",x:+centerX(x.n,L).toFixed(1),y:+(base+i*12).toFixed(1),v:String(x.f),c:"#b4532a",s:12,w:700,auto:"fingers"}));
     }
   }
@@ -1788,7 +1793,7 @@ ${pieceText(L,160)}`;
     let first=true;
     for(const group of lines.values()){
       const x0=Math.min(...group.map(b=>b.x))-4, x1=Math.max(...group.map(b=>b.x+b.w))+4;
-      const y0=Math.min(...group.map(b=>Math.min(b.top,b.hi)))-(first?60:42), y1=Math.max(...group.map(b=>Math.max(b.bot,b.lo)))+14;
+      const y0=Math.min(...group.map(b=>countY(b,L.withNames)))-(first?48:30), y1=Math.max(...group.map(b=>Math.max(b.bot,b.lo)))+14;
       out.push({t:"rect",x:+x0.toFixed(1),y:+y0.toFixed(1),w:+(x1-x0).toFixed(1),h:+(y1-y0).toFixed(1),c:"#e0a100",auto:"tips"});
       if(first){ out.push({t:"text",x:+(x0+5).toFixed(1),y:+(y0+3).toFixed(1),v:String(sp.tip||"").slice(0,90),c:"#8a5d00",s:12.5,auto:"tips"}); first=false; }
     }
@@ -1834,9 +1839,11 @@ $("#autoGo").onclick=async()=>{
   const btn=$("#autoGo"); btn.disabled=true;
   const status=t=>$("#autoStatus").textContent=t;
   const out=[]; const done=[];
+  L.withNames = kinds.includes("names") || sf.items.some(it=>it.auto==="names");
   try{
-    if(kinds.includes("names")){ autoNames(L,out); done.push("note names"); }
-    if(kinds.includes("count")){ autoCount(L,out); done.push("counting"); }
+    if(kinds.includes("names")){ autoNames(L,out); done.push("key names"); }
+    // counting sits above the names, so redo it whenever the names are added
+    if(kinds.includes("count") || (kinds.includes("names") && sf.items.some(it=>it.auto==="count"))){ autoCount(L,out); done.push("counting"); }
     if(kinds.includes("fingers")){ const n=await autoFingers(L,out,status); if(n) done.push("fingering"); }
     if(kinds.includes("tips")){ const n=await autoTips(L,out,status); if(n) done.push(n+" tricky spot"+(n>1?"s":"")); }
   }catch(e){
