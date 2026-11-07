@@ -229,6 +229,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
         <button id="pencilBtn" title="Draw with Apple Pencil or a stylus only, and scroll with your finger">Pencil only</button>
       </div>
       <span style="flex:1"></span>
+      <button id="autoBtn" class="primary" title="Let the app mark up this piece for you" style="display:none">✨ Annotate for me</button>
       <button id="exportBtn" title="Save the playable score as a MusicXML file" style="display:none">Download MusicXML</button>
       <div class="grp">
         <button id="zoomOut" title="Zoom out">−</button>
@@ -329,6 +330,23 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 </footer>
 
 <div id="backdrop"></div>
+<div id="autoModal" class="modalBg"><div class="card">
+  <h3>Annotate for me</h3>
+  <p class="small muted" id="autoIntro">Pick what to add to the score. These are regular markings, so you can erase any of them.</p>
+  <div id="autoOpts" style="display:flex;flex-direction:column;gap:8px;margin:12px 0">
+    <label><input type="checkbox" data-k="names" checked> <b>Note names</b> <span class="small muted">under every note</span></label>
+    <label><input type="checkbox" data-k="count" checked> <b>Counting</b> <span class="small muted">beat numbers above each bar (1 &amp; 2 &amp;)</span></label>
+    <label class="needsAI"><input type="checkbox" data-k="fingers" checked> <b>Fingering</b> <span class="small muted">suggested finger numbers for both hands</span></label>
+    <label class="needsAI"><input type="checkbox" data-k="tips" checked> <b>Tricky spots</b> <span class="small muted">boxes around the hardest bars, with a practice tip</span></label>
+  </div>
+  <p id="autoNoAI" class="small muted" style="display:none">Fingering and tricky spots need Claude. Add an API key in Settings to turn them on.</p>
+  <p id="autoStatus" class="small"></p>
+  <div class="row" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px">
+    <button id="autoRemove" title="Remove everything this button added">Remove auto markings</button>
+    <button id="autoClose">Close</button>
+    <button class="primary" id="autoGo">Annotate</button>
+  </div>
+</div></div>
 <div id="setModal" class="modalBg"><div class="card">
   <h3>Use your own Claude API key</h3>
   <p class="small">Outside of Claude, Practice Room can still read notes from PDFs and photos and answer questions if you give it an Anthropic API key. Get one at <a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a>. Usage is billed to your Anthropic account. Reading a page of music costs roughly a few cents to a quarter.</p>
@@ -714,6 +732,8 @@ async function renderPlayable(xml, box, tok){
     await osmd.load(xml);
     if(tok!==openToken) return;
     osmd.zoom=0.85;
+    // extra room between staves and lines, for written-in markings
+    try{ const er=osmd.EngravingRules; er.BetweenStaffDistance=Math.max(er.BetweenStaffDistance,7); er.StaffDistance=Math.max(er.StaffDistance,9); er.MinSkyBottomDistBetweenSystems=Math.max(er.MinSkyBottomDistBetweenSystems,13); er.MinimumDistanceBetweenSystems=Math.max(er.MinimumDistanceBetweenSystems,13); }catch(e){}
     osmd.render();
   }catch(e){
     console.error(e);
@@ -1056,6 +1076,13 @@ function drawItem(ctx,it){
   } else if(it.t==="finger"){
     ctx.fillStyle=it.c; ctx.font=`700 16px "IBM Plex Sans", sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
     ctx.fillText(it.v,it.x,it.y);
+  } else if(it.t==="lbl"){
+    ctx.font=`${it.w||600} ${it.s||11}px "IBM Plex Sans", sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.lineWidth=3; ctx.strokeStyle="rgba(255,253,248,.9)"; ctx.strokeText(it.v,it.x,it.y);
+    ctx.fillStyle=it.c; ctx.fillText(it.v,it.x,it.y);
+  } else if(it.t==="rect"){
+    ctx.fillStyle=it.c; ctx.globalAlpha=.16; ctx.fillRect(it.x,it.y,it.w,it.h);
+    ctx.globalAlpha=.7; ctx.strokeStyle=it.c; ctx.lineWidth=1.5; ctx.setLineDash([5,4]); ctx.strokeRect(it.x,it.y,it.w,it.h);
   }
   ctx.restore();
 }
@@ -1063,6 +1090,8 @@ function itemHit(it,x,y,r=9){
   if(it.t==="pen"||it.t==="hl"){ const rr=it.t==="hl"?r+6:r; for(let i=0;i<it.p.length;i+=2){ if(Math.hypot(it.p[i]-x,it.p[i+1]-y)<rr) return true; } return false; }
   if(it.t==="text"){ const lines=String(it.v).split("\n"); const w=Math.max(...lines.map(l=>l.length))*(it.s||18)*.55; return x>it.x-4&&x<it.x+w+4&&y>it.y-4&&y<it.y+lines.length*(it.s||18)*1.2+4; }
   if(it.t==="finger") return Math.hypot(it.x-x,it.y-y)<12;
+  if(it.t==="lbl") return Math.abs(it.x-x)<String(it.v).length*(it.s||11)*.35+4 && Math.abs(it.y-y)<(it.s||11)*.7;
+  if(it.t==="rect") return x>it.x&&x<it.x+it.w&&(Math.abs(y-it.y)<8||Math.abs(y-it.y-it.h)<8||(y>it.y&&y<it.y+it.h&&(Math.abs(x-it.x)<8||Math.abs(x-it.x-it.w)<8)));
   return false;
 }
 function bindSurface(s){
@@ -1586,7 +1615,12 @@ $("#keyRemove").onclick=()=>{ try{ localStorage.removeItem("pr-apikey"); }catch(
 
 /* ===================== download the playable score ===================== */
 function currentXML(){ const p=S.cur; if(!p) return null; if(p.kind==="xml") return S.cache[p.id]||null; if(p.transcript) return transcriptToXML(p.transcript); return null; }
-function updateExport(){ $("#exportBtn").style.display = (S.view==="playable" && currentXML()) ? "" : "none"; }
+function updateExport(){
+  const play = S.view==="playable" && !!currentXML();
+  $("#exportBtn").style.display = play ? "" : "none";
+  // annotate: on the playable score, or on an original that has (or can get) a playable version
+  $("#autoBtn").style.display = S.cur && (play || S.view==="original") ? "" : "none";
+}
 $("#exportBtn").onclick=async()=>{
   const xml=currentXML(); if(!xml) return;
   const filename=((S.cur.title||"score").replace(/[\\/:*?"<>|]+/g,"").trim()||"score")+".musicxml";
@@ -1596,6 +1630,227 @@ $("#exportBtn").onclick=async()=>{
   const url=URL.createObjectURL(new Blob([xml],{type:"application/vnd.recordare.musicxml+xml"}));
   const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),5000);
+};
+
+/* ===================== annotate for me ===================== */
+const LETTERS={0:"C",2:"D",4:"E",5:"F",7:"G",9:"A",11:"B"};
+const ACC={"-2":"𝄫","-1":"♭","0":"","1":"♯","2":"𝄪"};
+function spell(n){
+  try{ const p=n.Pitch; const L=LETTERS[p.FundamentalNote]; if(L) return L+(ACC[String(Math.round(p.AccidentalHalfTones))]??""); }catch(e){}
+  return NOTE_NAMES[(n.halfTone+12)%12];
+}
+// Read the engraved score: every note's position on the page, grouped by bar and staff.
+function scoreLayout(){
+  const osmd=S.osmd; const svg=$("#osmdBox svg"); if(!osmd||!svg) return null;
+  const sheet=svg.closest(".sheet"); const sr=svg.getBoundingClientRect(), hr=sheet.getBoundingClientRect();
+  const ox=(sr.left-hr.left)/S.scale, oy=(sr.top-hr.top)/S.scale, u=10*osmd.zoom;
+  const bars=[]; const notes=[];
+  osmd.GraphicSheet.MeasureList.forEach((row,mi)=>{
+    (row||[]).forEach((gm,si)=>{
+      if(!gm || !gm.PositionAndShape) return;
+      const a=gm.PositionAndShape.AbsolutePosition, sz=gm.PositionAndShape.Size;
+      const bar={mi, si, num:gm.parentSourceMeasure?.MeasureNumber ?? mi+1, x:ox+a.x*u, w:sz.width*u, top:oy+a.y*u, bot:oy+(a.y+4)*u, line:gm.ParentStaffLine, entries:[]};
+      const sm=gm.parentSourceMeasure; const ts=sm?.ActiveTimeSignature;
+      bar.len=sm?.Duration?.RealValue||1; bar.num_=ts?ts.Numerator:4; bar.den=ts?ts.Denominator:4;
+      for(const gse of gm.staffEntries||[]){
+        const ent={ts:gse.relInMeasureTimestamp.RealValue, x:null, notes:[]};
+        for(const gve of gse.graphicalVoiceEntries||[]) for(const gn of gve.notes||[]){
+          const n=gn.sourceNote; if(!n) continue;
+          const p=gn.PositionAndShape.AbsolutePosition;
+          const x=ox+p.x*u, y=oy+p.y*u;
+          if(ent.x==null || x<ent.x) ent.x=x;
+          if(n.isRest()) continue;
+          const tie=n.NoteTie; const cont=!!(tie && tie.StartNote!==n);
+          const rec={id:notes.length, mi, si, ts:ent.ts, x, y, midi:n.halfTone+12, name:spell(n), cont, len:n.Length.RealValue, num:bar.num};
+          notes.push(rec); ent.notes.push(rec);
+        }
+        if(ent.x!=null) bar.entries.push(ent);
+      }
+      bar.entries.sort((a,b)=>a.ts-b.ts);
+      bars.push(bar);
+    });
+  });
+  // vertical room: the highest/lowest note in each bar
+  for(const b of bars){ let hi=b.top, lo=b.bot; for(const e of b.entries) for(const n of e.notes){ hi=Math.min(hi,n.y-u*.6); lo=Math.max(lo,n.y+u*.6); } b.hi=hi; b.lo=lo; }
+  const nStaves=Math.max(1,...bars.map(b=>b.si+1));
+  return {bars, notes, u, nStaves};
+}
+function centerX(n,L){ return n.x+L.u*.62; }
+function autoNames(L,out){
+  for(const b of L.bars){
+    for(const e of b.entries){
+      const ns=e.notes.filter(n=>!n.cont).sort((a,c)=>c.midi-a.midi); if(!ns.length) continue;
+      const y0=Math.max(b.bot, b.lo)+11;
+      ns.forEach((n,i)=>out.push({t:"lbl",x:+centerX(n,L).toFixed(1),y:+(y0+i*11).toFixed(1),v:n.name,c:"#4b5b70",s:10.5,w:600,auto:"names"}));
+    }
+  }
+}
+function autoCount(L,out){
+  const syll=["","e","&","a"];
+  for(const b of L.bars){
+    if(b.si!==0) continue;
+    // all entries across the bar's staves, for x positions
+    const same=L.bars.filter(x=>x.mi===b.mi); const pts=[];
+    for(const s of same) for(const e of s.entries) pts.push({ts:e.ts,x:e.x});
+    pts.sort((a,c)=>a.ts-c.ts||a.x-c.x);
+    const uniq=[]; for(const p of pts){ if(!uniq.length || Math.abs(uniq[uniq.length-1].ts-p.ts)>1e-6) uniq.push({...p}); }
+    if(!uniq.length) continue;
+    const beat=1/b.den; const full=b.num_*beat;
+    const off = b.len<full-1e-6 ? full-b.len : 0; // pickup bar
+    // finest subdivision actually used in this bar
+    let sub=1; for(const p of uniq){ const q=(p.ts+off)/beat; for(const d of [1,2,4]){ if(Math.abs(q*d-Math.round(q*d))<1e-3){ sub=Math.max(sub,d); break; } } }
+    const endX=b.x+b.w-L.u;
+    const xAt=t=>{ // interpolate x for a time inside the bar
+      let a=null,c=null; for(const p of uniq){ if(p.ts<=t+1e-6) a=p; if(p.ts>=t-1e-6 && !c) c=p; }
+      if(a && Math.abs(a.ts-t)<1e-6) return a.x;
+      if(!a) return uniq[0].x;
+      const nx=c?c.x:endX, nt=c?c.ts:b.len; return a.x+(nx-a.x)*((t-a.ts)/Math.max(1e-6,nt-a.ts));
+    };
+    const y=Math.min(b.top, b.hi)-12;
+    for(let k=0;k<b.num_*sub;k++){
+      const tAbs=k*beat/sub; const t=tAbs-off; if(t<-1e-6 || t>=b.len-1e-6) continue;
+      const bi=Math.floor(k/sub), si=k%sub;
+      const v = si===0 ? String(bi+1) : syll[sub===2? 2 : si];
+      out.push({t:"lbl",x:+(xAt(t)+L.u*.62).toFixed(1),y:+y.toFixed(1),v,c:si===0?"#7b3fa0":"#a07cbd",s:si===0?12:10.5,w:si===0?700:600,auto:"count"});
+    }
+  }
+}
+function pieceText(L, maxBars=400){
+  // compact listing of the notes per bar and hand, with ids, for Claude
+  const hands=L.nStaves>=2?["RH","LH"]:["Notes"];
+  const lines=[]; const byBar=new Map();
+  for(const b of L.bars){ if(!byBar.has(b.mi)) byBar.set(b.mi,[]); byBar.get(b.mi).push(b); }
+  let count=0;
+  for(const [mi,bs] of byBar){
+    if(++count>maxBars) break;
+    for(const b of bs.sort((a,c)=>a.si-c.si)){
+      const ev=b.entries.map(e=>e.notes.filter(n=>!n.cont).sort((a,c)=>a.midi-c.midi).map(n=>`${n.id}=${n.name}${Math.floor(n.midi/12)-1}`).join(",")).filter(Boolean);
+      lines.push(`m${b.num} ${hands[b.si]??"S"+(b.si+1)}: ${ev.join(" ")||"(rest)"}`);
+    }
+  }
+  return lines.join("\n");
+}
+async function autoFingers(L,out,status){
+  const hands=L.nStaves>=2;
+  const all=pieceText(L).split("\n");
+  const chunks=[]; for(let i=0;i<all.length;i+=hands?48:24) chunks.push(all.slice(i,i+(hands?48:24)).join("\n"));
+  const fingers={};
+  for(let i=0;i<chunks.length;i++){
+    status(`Working out fingering${chunks.length>1?` (part ${i+1} of ${chunks.length})`:""}…`);
+    const prompt=`You are an experienced piano teacher writing fingering for an adult returning to the piano.
+Below are the notes of a piano piece, bar by bar. Each note is id=NoteOctave (C4 is middle C). Notes joined by commas sound together (a chord); spaces separate successive events in time. ${hands?"RH is the right hand (top staff), LH the left hand (bottom staff).":"Assume the right hand plays this staff."}
+Choose comfortable, standard fingering (1 = thumb ... 5 = little finger), thinking about hand position shifts, scale and arpeggio patterns, and what comes next. Give a finger for every note id listed.
+Return ONLY JSON, no prose: {"f":{"<id>":<finger>, ...}}
+
+${chunks[i]}`;
+    const res=await S.sample(prompt,{modelTier:"complex", cache:false});
+    const j=parseJSONLoose(res.text||"");
+    if(j && j.v && j.v.f) Object.assign(fingers, j.v.f);
+  }
+  const byId=new Map(L.notes.map(n=>[String(n.id),n]));
+  // place: right hand above the staff, left hand below the staff (under the note names)
+  const entryGroups=new Map();
+  for(const [id,f] of Object.entries(fingers)){
+    const n=byId.get(String(id)); const fv=parseInt(f); if(!n||!(fv>=1&&fv<=5)) continue;
+    const key=n.mi+"_"+n.si+"_"+n.ts; if(!entryGroups.has(key)) entryGroups.set(key,[]); entryGroups.get(key).push({n,f:fv});
+  }
+  const barOf=(mi,si)=>L.bars.find(b=>b.mi===mi&&b.si===si);
+  for(const g of entryGroups.values()){
+    const n0=g[0].n; const b=barOf(n0.mi,n0.si); if(!b) continue;
+    const lh = hands && n0.si===1;
+    g.sort((a,c)=>c.n.midi-a.n.midi); // top note first
+    if(!lh){
+      const base=Math.min(b.top,b.hi)-26; // above the counting row
+      g.forEach((x,i)=>out.push({t:"lbl",x:+centerX(x.n,L).toFixed(1),y:+(base-(g.length-1-i)*12).toFixed(1),v:String(x.f),c:"#1f6fb2",s:12,w:700,auto:"fingers"}));
+    } else {
+      const namesRows=Math.max(1,...b.entries.map(e=>e.notes.filter(n=>!n.cont).length));
+      const base=Math.max(b.bot,b.lo)+11+namesRows*11+6;
+      g.forEach((x,i)=>out.push({t:"lbl",x:+centerX(x.n,L).toFixed(1),y:+(base+i*12).toFixed(1),v:String(x.f),c:"#b4532a",s:12,w:700,auto:"fingers"}));
+    }
+  }
+  return Object.keys(fingers).length;
+}
+async function autoTips(L,out,status){
+  status("Finding the tricky spots…");
+  const prompt=`You are a warm, practical piano teacher. An adult returning to the piano is learning this piece. Below are its notes, bar by bar (id=NoteOctave, commas = played together; ${L.nStaves>=2?"RH right hand, LH left hand":"one staff"}). ${S.timeline?`The tempo marking is about ${S.timeline.bpm} BPM.`:""}
+Pick the 2 to 5 passages most likely to trip them up (big leaps, awkward chords, fast runs, hand-coordination spots, accidentals, rhythm traps). For each, give a concrete practice tip of at most 12 words.
+Return ONLY JSON, no prose: {"spots":[{"from":<bar number>,"to":<bar number>,"tip":"..."}]}
+
+${pieceText(L,160)}`;
+  const res=await S.sample(prompt,{modelTier:"complex", cache:false});
+  const j=parseJSONLoose(res.text||""); const spots=(j&&j.v&&Array.isArray(j.v.spots))?j.v.spots:[];
+  let n=0;
+  for(const sp of spots.slice(0,6)){
+    const from=+sp.from, to=+(sp.to??sp.from);
+    const bs=L.bars.filter(b=>b.num>=from && b.num<=to); if(!bs.length) continue;
+    // one box per system line the passage touches
+    const lines=new Map(); for(const b of bs){ const k=b.line?.PositionAndShape?.AbsolutePosition?.y ?? Math.round(b.top/50); if(!lines.has(k)) lines.set(k,[]); lines.get(k).push(b); }
+    let first=true;
+    for(const group of lines.values()){
+      const x0=Math.min(...group.map(b=>b.x))-4, x1=Math.max(...group.map(b=>b.x+b.w))+4;
+      const y0=Math.min(...group.map(b=>Math.min(b.top,b.hi)))-(first?60:42), y1=Math.max(...group.map(b=>Math.max(b.bot,b.lo)))+14;
+      out.push({t:"rect",x:+x0.toFixed(1),y:+y0.toFixed(1),w:+(x1-x0).toFixed(1),h:+(y1-y0).toFixed(1),c:"#e0a100",auto:"tips"});
+      if(first){ out.push({t:"text",x:+(x0+5).toFixed(1),y:+(y0+3).toFixed(1),v:String(sp.tip||"").slice(0,90),c:"#8a5d00",s:12.5,auto:"tips"}); first=false; }
+    }
+    n++;
+  }
+  return n;
+}
+function openAuto(){
+  const ai=!!S.sample;
+  $$("#autoOpts .needsAI").forEach(l=>{ l.style.opacity=ai?1:.45; l.querySelector("input").disabled=!ai; if(!ai) l.querySelector("input").checked=false; });
+  $("#autoNoAI").style.display = ai ? "none" : "";
+  $("#autoNoAI").textContent = window.claude ? "Fingering and tricky spots need Claude, which isn't available in this view right now." : "Fingering and tricky spots need Claude. Add an API key in Settings to turn them on.";
+  $("#autoStatus").textContent="";
+  $("#autoModal").classList.add("show");
+}
+$("#autoBtn").onclick=async()=>{
+  if(S.view==="original"){
+    if(S.cur?.transcript){ await showView("playable"); S.cur.lastView="playable"; openAuto(); return; }
+    if(await confirmBox("Annotate the playable score", "Annotations go on the Playable version, where the app knows exactly where every note sits. Claude will read the notes from your PDF first, which takes about a minute a page.", "Read the notes")){
+      S.cur.lastView="playable"; await showView("playable");
+      const card=$("#scaled .card"); const go=card?.querySelector("#goRead"); if(go) go.click(); else card?.querySelector("#openKey")?.click();
+    }
+    return;
+  }
+  openAuto();
+};
+$("#autoClose").onclick=()=>$("#autoModal").classList.remove("show");
+function scoreSurface(){ return S.surfaces.find(s=>s.key==="score"); }
+$("#autoRemove").onclick=()=>{
+  const sf=scoreSurface(); if(!sf) return;
+  const kinds=$$("#autoOpts input").filter(i=>i.checked).map(i=>i.dataset.k);
+  const all=!kinds.length;
+  const keep=sf.items.filter(it=>!it.auto || (!all && !kinds.includes(it.auto)));
+  if(keep.length===sf.items.length){ $("#autoStatus").textContent="There are no automatic markings to remove."; return; }
+  S.undo.push({s:sf,op:"clear",items:sf.items}); sf.items=keep; drawSurface(sf); commit(sf);
+  $("#autoStatus").textContent="Removed. Undo brings them back.";
+};
+$("#autoGo").onclick=async()=>{
+  const sf=scoreSurface(); const L=scoreLayout();
+  if(!sf||!L||!L.notes.length){ $("#autoStatus").textContent="Open the Playable score first."; return; }
+  const kinds=$$("#autoOpts input").filter(i=>i.checked&&!i.disabled).map(i=>i.dataset.k);
+  if(!kinds.length){ $("#autoStatus").textContent="Pick at least one."; return; }
+  const btn=$("#autoGo"); btn.disabled=true;
+  const status=t=>$("#autoStatus").textContent=t;
+  const out=[]; const done=[];
+  try{
+    if(kinds.includes("names")){ autoNames(L,out); done.push("note names"); }
+    if(kinds.includes("count")){ autoCount(L,out); done.push("counting"); }
+    if(kinds.includes("fingers")){ const n=await autoFingers(L,out,status); if(n) done.push("fingering"); }
+    if(kinds.includes("tips")){ const n=await autoTips(L,out,status); if(n) done.push(n+" tricky spot"+(n>1?"s":"")); }
+  }catch(e){
+    status(e?.code==="bad_key"?"Your API key didn't work. Check it in Settings.":e?.code==="rate_limited"?"Claude is busy right now. Try again in a minute.":e?.code==="not_granted"?"Claude wasn't allowed to help here.":"Something went wrong: "+(e?.message||"try again")+".");
+  }
+  if(out.length){
+    S.undo.push({s:sf,op:"clear",items:sf.items});
+    const doneKinds=new Set(out.map(o=>o.auto));
+    sf.items=sf.items.filter(it=>!(it.auto && doneKinds.has(it.auto))).concat(out);
+    drawSurface(sf); commit(sf); setMode("play");
+    status("Added "+done.join(", ")+". Switch to Mark up to erase or change any of them.");
+    setTimeout(()=>$("#autoModal").classList.remove("show"),1600);
+  } else if(!$("#autoStatus").textContent.startsWith("Something")&&!$("#autoStatus").textContent.includes("API")) status("Nothing was added.");
+  btn.disabled=false;
 };
 
 /* ===================== boot ===================== */

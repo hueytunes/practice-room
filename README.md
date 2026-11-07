@@ -11,6 +11,7 @@ A sheet music practice app for piano. Open a MusicXML score, mark it up, and pla
 - Shows a piano with the keys to press (teal for right hand, orange for left, rings for the next notes)
 - Steps through the music one chord at a time with the arrow keys
 - Lets you mark up any page with pen, highlighter, text, and finger numbers (Apple Pencil works too)
+- Annotates a score for you: note names, counting, and (with Claude) suggested fingering and tricky spots with practice tips
 
 Your pieces and markings save in your browser on that device.
 
