@@ -22,6 +22,9 @@ Your pieces and markings save in your browser on that device.
 
 On iPad, open that link in Safari, tap Share, then "Add to Home Screen." Safari can clear saved data for websites you haven't opened in a while, and adding the app to your Home Screen protects your library from that.
 
-## Note
+## Reading notes from a PDF or photo
 
-Reading notes from a PDF or photo, and the "Ask Claude" panel, only work when you open the app from Claude.
+On this site, there are two ways to make a PDF or photo playable:
+
+- **Your own API key:** tap Settings, paste an Anthropic API key (from console.anthropic.com), and the app can read notes and answer questions here. The key stays in your browser on that device, and usage is billed to your Anthropic account.
+- **The Claude version:** read the notes in the Claude-hosted copy of the app, tap "Download MusicXML," and add that file here.

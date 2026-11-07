@@ -161,9 +161,9 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 .disabledArea{opacity:.4;pointer-events:none}
 
 /* modal */
-#modal{position:fixed;inset:0;background:rgba(30,25,15,.35);display:none;align-items:center;justify-content:center;z-index:50}
-#modal.show{display:flex}
-#modal .card{margin:0;max-width:420px}
+#modal,.modalBg{position:fixed;inset:0;background:rgba(30,25,15,.35);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+#modal.show,.modalBg.show{display:flex}
+#modal .card,.modalBg .card{margin:0;max-width:460px}
 #modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 @media (max-width:900px){
@@ -182,6 +182,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   <div class="title"><input id="pieceTitle" placeholder="No piece open" disabled></div>
   <span id="saveState" class="muted small"></span>
   <button id="sideBtn" title="Notes and questions">Notes &amp; help</button>
+  <button id="setBtn" title="Settings" style="display:none">Settings</button>
 </header>
 <div class="notice" id="notice"></div>
 <div class="main">
@@ -222,6 +223,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
         <button id="pencilBtn" title="Draw with Apple Pencil or a stylus only, and scroll with your finger">Pencil only</button>
       </div>
       <span style="flex:1"></span>
+      <button id="exportBtn" title="Save the playable score as a MusicXML file" style="display:none">Download MusicXML</button>
       <div class="grp">
         <button id="zoomOut" title="Zoom out">−</button>
         <span id="zoomLbl" class="small muted" style="min-width:38px;text-align:center">100%</span>
@@ -319,6 +321,14 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   </div>
 </footer>
 
+<div id="setModal" class="modalBg"><div class="card">
+  <h3>Use your own Claude API key</h3>
+  <p class="small">Outside of Claude, Practice Room can still read notes from PDFs and photos and answer questions if you give it an Anthropic API key. Get one at <a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a>. Usage is billed to your Anthropic account. Reading a page of music costs roughly a few cents to a quarter.</p>
+  <p class="small">The key is stored only in this browser on this device and is sent only to Anthropic.</p>
+  <input id="keyIn" type="password" placeholder="sk-ant-..." autocomplete="off" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--paper)">
+  <p id="keyStatus" class="small muted"></p>
+  <div class="row" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button id="keyRemove">Remove key</button><button id="keyClose">Close</button><button class="primary" id="keySave">Save</button></div>
+</div></div>
 <div id="modal"><div class="card"><h3 id="mTitle"></h3><p id="mText"></p><div class="row"><button id="mNo">Cancel</button><button class="primary" id="mYes">OK</button></div></div></div>
 
 <script>
@@ -386,7 +396,8 @@ const Store={ mode:"memory",
       local: "Your library saves in this browser, on this device.",
       memory:"Saving isn’t available here, so pieces stay for this visit only." }[this.mode];
     $("#storageNote").textContent=msg;
-    if(!S.sample){ $("#side .tabs button[data-tab=ask]").style.display="none"; }
+    if(!window.claude){ $("#setBtn").style.display=""; const k=pref("apikey"); if(k) S.sample=makeApiSample(k); }
+    refreshAskTab();
   },
   col(){ return this.lib.collection("pieces"); },
   annRef(pid,key){ return this.lib.collection("ann").doc(pid+"_"+key); },
@@ -613,7 +624,7 @@ function closePiece(){
   S.cur=null; S.surfaces=[]; S.osmd=null; S.timeline=null;
   $("#scaled").innerHTML=""; $("#sizer").style.display="none"; $("#empty").style.display="";
   $("#pieceTitle").value=""; $("#pieceTitle").disabled=true; $("#notes").value=""; $("#notes").disabled=true;
-  updateTransport();
+  updateTransport(); updateExport();
 }
 $("#pieceTitle").addEventListener("input", e=>{ if(!S.cur) return; S.cur.title=e.target.value; renderList(); savePiece(S.cur,{title:e.target.value},1200); });
 $("#notes").addEventListener("input", e=>{ if(!S.cur) return; savePiece(S.cur,{notes:e.target.value},1500); });
@@ -635,7 +646,7 @@ async function showView(view){
     if(!xml){ renderTranscribeCard(box); }
     else await renderPlayable(xml, box, tok);
   }
-  updateTransport(); sizeStage();
+  updateTransport(); sizeStage(); updateExport();
 }
 
 /* ===================== original view (pdf / image) ===================== */
@@ -787,8 +798,17 @@ function renderTranscribeCard(box){
   const p=S.cur;
   const c=document.createElement("div"); c.className="card";
   if(!S.sample){
-    c.innerHTML=`<h2>Playback needs MusicXML here</h2><p>Reading the notes from a ${p.kind==="pdf"?"PDF":"photo"} needs Claude, which only works when you open Practice Room from Claude. Here you can still mark up the Original, and for playback you can add a MusicXML version of the piece.</p>`;
-    box.appendChild(c); return;
+    const outside=!window.claude;
+    c.innerHTML=`<h2>Make this playable</h2>
+    <p>Reading the notes from a ${p.kind==="pdf"?"PDF":"photo"} needs Claude. ${outside?"There are two ways to do that from here:":"Claude isn't available in this view right now."}</p>
+    ${outside?`<ul>
+      <li><b>Add your own Claude API key</b> and read the notes right here. <button id="openKey" class="primary" style="margin-left:4px">Add API key</button></li>
+      <li><b>Use the Claude version</b> of Practice Room to read the notes, tap <i>Download MusicXML</i> there, and add that file here. It plays exactly, with no key needed.</li>
+    </ul>`:""}
+    <p class="small muted">You can mark up the Original in the meantime.</p>`;
+    box.appendChild(c);
+    c.querySelector("#openKey")?.addEventListener("click",openSettings);
+    return;
   }
   c.innerHTML=`<h2>Make this playable</h2>
   <p>Claude will read the notes from your ${p.kind==="pdf"?"PDF":"photo"} and turn them into a score you can hear, loop, and slow down. It takes about a minute per page.</p>
@@ -868,7 +888,9 @@ async function transcribe(card){
     try{
       res=await S.sample(prompt,{images:[imgs[i]], modelTier:"complex", onText:({text})=>{ stream.textContent=text.slice(-1200); stream.scrollTop=stream.scrollHeight; }});
     }catch(e){
-      if(e?.code==="not_granted"){ st.textContent="Claude wasn’t allowed to read the page, so the notes weren’t read."; }
+      if(e?.code==="bad_key"){ st.textContent="Your API key didn’t work. Check it in Settings."; }
+      else if(e?.code==="api_error"){ st.textContent="The Claude API returned an error: "+(e.message||"unknown")+"."; }
+      else if(e?.code==="not_granted"){ st.textContent="Claude wasn’t allowed to read the page, so the notes weren’t read."; }
       else if(e?.code==="rate_limited"){ st.textContent="Claude is busy right now. Try again in a minute."; }
       else st.textContent="Something went wrong while reading the notes. Try again.";
       btn.disabled=false; return;
@@ -1489,8 +1511,74 @@ Question: ${q}`;
     A.innerHTML=miniMd(res.text||"");
   }catch(e){
     if(e?.name==="AbortError") return;
-    A.textContent = e?.code==="rate_limited" ? "Claude is busy right now. Try again in a minute." : e?.code==="not_granted" ? "Claude wasn't allowed to answer here." : "Couldn't get an answer. Try again.";
+    A.textContent = e?.code==="bad_key" ? "Your API key didn't work. Check it in Settings." : e?.code==="api_error" ? "The Claude API returned an error: "+(e.message||"unknown") : e?.code==="rate_limited" ? "Claude is busy right now. Try again in a minute." : e?.code==="not_granted" ? "Claude wasn't allowed to answer here." : "Couldn't get an answer. Try again.";
   }
+};
+
+/* ===================== your own API key (outside Claude) ===================== */
+function refreshAskTab(){ $("#side .tabs button[data-tab=ask]").style.display = S.sample ? "" : "none"; if(!S.sample){ $("#tab-ask").style.display="none"; $("#tab-notes").style.display=""; $$("#side .tabs button").forEach(x=>x.classList.toggle("on",x.dataset.tab==="notes")); } }
+async function blobB64(b){ const buf=new Uint8Array(await b.arrayBuffer()); let s=""; for(let i=0;i<buf.length;i+=0x8000) s+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000)); return btoa(s); }
+function makeApiSample(key){
+  const f=async(prompt,opts={})=>{
+    const content=[];
+    for(const b of (opts.images||[])) content.push({type:"image",source:{type:"base64",media_type:b.type||"image/jpeg",data:await blobB64(b)}});
+    content.push({type:"text",text:typeof prompt==="string"?prompt:String(prompt)});
+    const complex=opts.modelTier==="complex";
+    let r;
+    try{
+      r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:opts.signal,
+        headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:complex?"claude-opus-5-5":"claude-sonnet-5-5",max_tokens:complex?32000:2000,stream:true,messages:[{role:"user",content}]})});
+    }catch(e){ if(e?.name==="AbortError") throw e; throw {code:"api_error",message:"couldn't reach the API"}; }
+    if(!r.ok){
+      let msg=""; try{ msg=(await r.json()).error?.message||""; }catch(e){}
+      throw {code: r.status===401||r.status===403?"bad_key": (r.status===429||r.status===529)?"rate_limited":"api_error", message:msg};
+    }
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="", text="", stop=null;
+    while(true){
+      const {done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf("\n\n"))>=0){
+        const chunk=buf.slice(0,i); buf=buf.slice(i+2);
+        const line=chunk.split("\n").find(l=>l.startsWith("data:")); if(!line) continue;
+        let ev; try{ ev=JSON.parse(line.slice(5)); }catch(e){ continue; }
+        if(ev.type==="content_block_delta" && ev.delta?.type==="text_delta"){ text+=ev.delta.text; opts.onText?.({text,delta:ev.delta.text}); }
+        else if(ev.type==="message_delta" && ev.delta?.stop_reason) stop=ev.delta.stop_reason;
+        else if(ev.type==="error") throw {code:"api_error",message:ev.error?.message};
+      }
+    }
+    return {text, truncated: stop==="max_tokens"};
+  };
+  f.limits=async()=>({images:true});
+  return f;
+}
+function openSettings(){ $("#keyIn").value=pref("apikey")||""; $("#keyStatus").textContent=pref("apikey")?"A key is saved on this device.":""; $("#setModal").classList.add("show"); }
+$("#setBtn").onclick=openSettings;
+$("#keyClose").onclick=()=>$("#setModal").classList.remove("show");
+$("#keySave").onclick=async()=>{
+  const k=$("#keyIn").value.trim(); if(!k){ $("#keyStatus").textContent="Paste a key first."; return; }
+  $("#keyStatus").textContent="Checking the key…";
+  try{
+    await makeApiSample(k)("Reply with the single word OK.",{});
+    pref("apikey",k); S.sample=makeApiSample(k); refreshAskTab();
+    $("#keyStatus").textContent="Saved. The key works.";
+    setTimeout(()=>{ $("#setModal").classList.remove("show"); if(S.cur && S.view==="playable") showView("playable"); },700);
+  }catch(e){ $("#keyStatus").textContent = e?.code==="bad_key" ? "That key didn't work. Check that you copied all of it." : "Couldn't check the key: "+(e?.message||"try again")+"."; }
+};
+$("#keyRemove").onclick=()=>{ try{ localStorage.removeItem("pr-apikey"); }catch(e){} S.sample=null; refreshAskTab(); $("#keyIn").value=""; $("#keyStatus").textContent="Key removed from this device."; if(S.cur && S.view==="playable") showView("playable"); };
+
+/* ===================== download the playable score ===================== */
+function currentXML(){ const p=S.cur; if(!p) return null; if(p.kind==="xml") return S.cache[p.id]||null; if(p.transcript) return transcriptToXML(p.transcript); return null; }
+function updateExport(){ $("#exportBtn").style.display = (S.view==="playable" && currentXML()) ? "" : "none"; }
+$("#exportBtn").onclick=async()=>{
+  const xml=currentXML(); if(!xml) return;
+  const filename=((S.cur.title||"score").replace(/[\\/:*?"<>|]+/g,"").trim()||"score")+".musicxml";
+  const dl=await useCap("downloads");
+  if(dl){ try{ await dl.save({filename,data:xml}); }catch(e){ if(e?.code!=="declined") notice("Couldn't save the file."); } return; }
+  if(window.claude){ notice("Downloads aren't available in this view."); return; }
+  const url=URL.createObjectURL(new Blob([xml],{type:"application/vnd.recordare.musicxml+xml"}));
+  const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
 };
 
 /* ===================== boot ===================== */
