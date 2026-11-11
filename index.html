@@ -401,7 +401,7 @@ body.loopPick .sheet canvas.ann{cursor:pointer}
 "use strict";
 // Home Screen (standalone) mode on iPad/iPhone: leave room under the system's blurred top edge
 try{ if(navigator.standalone || matchMedia("(display-mode: standalone)").matches) document.documentElement.classList.add("standalone"); }catch(e){}
-const APP_VERSION="2026.11.10-6";
+const APP_VERSION="2026.11.10-7";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1099,9 +1099,14 @@ async function addSurface(sheet, key, cssH){
 }
 function sizeSurface(s){
   const h=s.sheet.offsetHeight||s.h; s.h=h;
-  const dpr=Math.min(2,window.devicePixelRatio||1)*Math.max(1,S.zoom);
-  s.canvas.width=Math.round(960*dpr); s.canvas.height=Math.round(h*dpr); s.dpr=dpr;
+  let dpr=Math.min(2,window.devicePixelRatio||1)*Math.max(1,S.zoom);
+  dpr=Math.min(dpr, 3, Math.sqrt(14e6/(960*Math.max(1,h)))); // stay under the iPad's canvas size limit
+  dpr=Math.round(dpr*4)/4;                                    // fewer resizes for tiny zoom changes
+  const w=Math.round(960*dpr), hh=Math.round(h*dpr);
+  if(s.canvas.width===w && s.canvas.height===hh && s.dpr===dpr) return false;
+  s.canvas.width=w; s.canvas.height=hh; s.dpr=dpr; return true;
 }
+function redrawMarkings(){ S.surfaces.forEach(s=>{ sizeSurface(s); drawSurface(s); }); }
 function drawSurface(s){
   const ctx=s.canvas.getContext("2d"); ctx.setTransform(s.dpr,0,0,s.dpr,0,0);
   ctx.clearRect(0,0,960,s.h);
@@ -1241,28 +1246,61 @@ function sizeStage(){
   $("#sizer").style.width=(960*S.scale)+"px"; $("#sizer").style.height=(h*S.scale)+"px";
   $("#zoomLbl").textContent=Math.round(S.zoom*100)+"%";
 }
-function setZoom(z){ S.zoom=Math.max(.5,Math.min(2.5,z)); sizeStage(); S.surfaces.forEach(s=>{ sizeSurface(s); drawSurface(s); }); }
-// pinch with two fingers on the music to zoom just the music (not the whole page)
+function setZoom(z){ S.zoom=Math.max(.5,Math.min(2.5,z)); sizeStage(); requestAnimationFrame(()=>redrawMarkings()); }
+// Zooming the music: while fingers move, the page is only stretched as a GPU preview (cheap and smooth);
+// when the gesture ends the score is laid out once at the new size and the markings are redrawn sharply.
 (function(){
-  const sc=$("#scroller"); let pinch=null;
+  const sc=$("#scroller"), sizer=$("#sizer");
+  const MINZ=.5, MAXZ=2.5;
   const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
   const mid=t=>({x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2});
-  sc.addEventListener("touchstart",e=>{
-    if(e.touches.length!==2) return;
+  let g=null, raf=0;
+  function begin(m){
     S.surfaces.forEach(s=>{ if(s.live){ s.live=null; drawSurface(s); } s.erasing=false; });
-    const r=sc.getBoundingClientRect(), m=mid(e.touches);
-    pinch={d0:dist(e.touches), z0:S.zoom, cx:(sc.scrollLeft+m.x-r.left)/S.scale, cy:(sc.scrollTop+m.y-r.top)/S.scale};
-  },{passive:true});
-  sc.addEventListener("touchmove",e=>{
-    if(!pinch||e.touches.length!==2) return;
-    e.preventDefault();
-    const z=Math.max(.5,Math.min(2.5,pinch.z0*dist(e.touches)/pinch.d0));
+    const r=sizer.getBoundingClientRect();
+    g={z0:S.zoom, k:1, m0:m, m:m, ox:m.x-r.left, oy:m.y-r.top, scale0:S.scale};
+    sizer.style.transformOrigin=`${g.ox}px ${g.oy}px`;
+    sizer.style.willChange="transform";
+  }
+  function preview(){
+    raf=0; if(!g) return;
+    const dx=g.m.x-g.m0.x, dy=g.m.y-g.m0.y;
+    sizer.style.transform=`translate3d(${dx}px,${dy}px,0) scale(${g.k})`;
+  }
+  function schedule(){ if(!raf) raf=requestAnimationFrame(preview); }
+  function commit(){
+    if(!g) return;
+    cancelAnimationFrame(raf); raf=0;
+    const G=g; g=null;
+    const z=Math.max(MINZ,Math.min(MAXZ,G.z0*G.k));
+    // the point of the music that started under the fingers
+    const px=G.ox/G.scale0, py=G.oy/G.scale0;
+    sizer.style.transform=""; sizer.style.willChange="";
     S.zoom=z; sizeStage();
-    const r=sc.getBoundingClientRect(), m=mid(e.touches);
-    sc.scrollLeft=pinch.cx*S.scale-(m.x-r.left); sc.scrollTop=pinch.cy*S.scale-(m.y-r.top);
+    const r=sizer.getBoundingClientRect();
+    sc.scrollLeft+= (r.left+px*S.scale) - G.m.x;
+    sc.scrollTop += (r.top +py*S.scale) - G.m.y;
+    requestAnimationFrame(()=>redrawMarkings());
+  }
+  // touch pinch (iPad)
+  let d0=0;
+  sc.addEventListener("touchstart",e=>{ if(e.touches.length!==2) return; d0=dist(e.touches); begin(mid(e.touches)); },{passive:true});
+  sc.addEventListener("touchmove",e=>{
+    if(!g||e.touches.length!==2) return;
+    e.preventDefault();
+    g.k=Math.max(MINZ/g.z0,Math.min(MAXZ/g.z0,dist(e.touches)/d0)); g.m=mid(e.touches); schedule();
   },{passive:false});
-  const end=e=>{ if(pinch && e.touches.length<2){ pinch=null; setZoom(S.zoom); } };
+  const end=e=>{ if(g && e.touches.length<2) commit(); };
   sc.addEventListener("touchend",end); sc.addEventListener("touchcancel",end);
+  // trackpad pinch / ctrl+scroll (Mac)
+  let wheelT=0;
+  sc.addEventListener("wheel",e=>{
+    if(!e.ctrlKey) return;
+    e.preventDefault();
+    if(!g) begin({x:e.clientX,y:e.clientY});
+    g.k=Math.max(MINZ/g.z0,Math.min(MAXZ/g.z0,g.k*Math.exp(-e.deltaY*.01)));
+    schedule(); clearTimeout(wheelT); wheelT=setTimeout(commit,160);
+  },{passive:false});
   // stop Safari from zooming the whole app
   ["gesturestart","gesturechange","gestureend"].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
   document.addEventListener("dblclick",e=>{ if(!e.target.closest("input,textarea")) e.preventDefault(); },{passive:false});
