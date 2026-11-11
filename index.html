@@ -329,7 +329,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
       </div>
       <span class="legend needsPiece"><i style="background:var(--rh)"></i>right hand <i style="background:var(--lh)"></i>left hand <i class="ring"></i>coming next</span>
       <span style="flex:1"></span>
-      <button id="namesBtn" title="Label every white key (off shows just the Cs)">Key names</button>
+      <button id="namesBtn" title="Label every white key (off shows just the Cs)">Label keys</button>
       <div class="seg" id="rangeSeg"><button data-r="fit" class="on" title="Just the keys this piece uses">Fit</button><button data-r="full" title="All 88 keys">88 keys</button></div>
       <div class="seg" id="sizeSeg"><button data-z="S">S</button><button data-z="M" class="on">M</button><button data-z="L">L</button></div>
     </div>
@@ -369,7 +369,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 "use strict";
 // Home Screen (standalone) mode on iPad/iPhone: leave room under the system's blurred top edge
 try{ if(navigator.standalone || matchMedia("(display-mode: standalone)").matches) document.documentElement.classList.add("standalone"); }catch(e){}
-const APP_VERSION="2026.11.10-2";
+const APP_VERSION="2026.11.10-3";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1473,7 +1473,7 @@ $("#loopBtn").onclick=e=>{ Player.loop=!Player.loop; e.target.classList.toggle("
 ["#loopA","#loopB"].forEach(id=>$(id).onchange=()=>{ if(S.cur) savePiece(S.cur,{loopA:+$("#loopA").value,loopB:+$("#loopB").value},1000); if(Player.loop){ if(Player.playing) Player.restartIfPlaying(); else { const R=Player.region(); if(R) Player.seek(R.s); } } });
 $("#hands").addEventListener("click",e=>{ const b=e.target.closest(".hand"); if(!b) return; const i=+b.dataset.staff; Player.muted[i]=!Player.muted[i]; b.classList.toggle("on",!Player.muted[i]); b.title=Player.muted[i]?"Muted: you play this part":"Mute this part to play it yourself"; });
 $("#kbBtn").onclick=e=>{ const on=$("#pianoWrap").style.display==="none"; $("#pianoWrap").style.display=on?"":"none"; e.target.classList.toggle("on",on); pref("piano",on?"1":"0"); sizeStage(); };
-$("#namesBtn").onclick=e=>{ KB.names=!KB.names; e.target.classList.toggle("on",KB.names); $("#kb").classList.toggle("names",KB.names); pref("names",KB.names?"1":"0"); };
+$("#namesBtn").onclick=e=>{ KB.names=!KB.names; e.target.classList.toggle("on",KB.names); $("#kb").classList.toggle("names",KB.names); pref("kbnames",KB.names?"1":"0"); };
 $("#rangeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; KB.range=b.dataset.r; $$("#rangeSeg button").forEach(x=>x.classList.toggle("on",x===b)); pref("range",KB.range); KB.build(S.timeline); KB.show(Player.uiStep); });
 const KB_H={S:96,M:136,L:184};
 function setKbSize(z){ KB.size=z; $("#kb").style.setProperty("--kbh",KB_H[z]+"px"); $$("#sizeSeg button").forEach(x=>x.classList.toggle("on",x.dataset.z===z)); pref("kbsize",z); sizeStage(); }
@@ -1560,7 +1560,7 @@ const KB={ keys:{}, active:new Map(), lit:new Set(), ghosts:new Set(), names:fal
 };
 setKbSize(pref("kbsize") || (window.innerWidth<700?"S":"M"));
 // every white key is labeled unless you turn it off
-if(pref("names")!=="0"){ KB.names=true; $("#namesBtn").classList.add("on"); }
+if(pref("kbnames")!=="0"){ KB.names=true; $("#namesBtn").classList.add("on"); }
 if(pref("range")==="full"){ KB.range="full"; $$("#rangeSeg button").forEach(x=>x.classList.toggle("on",x.dataset.r==="full")); }
 if(pref("piano")==="0"){ $("#pianoWrap").style.display="none"; $("#kbBtn").classList.remove("on"); }
 if(pref("pencil")==="1"){ document.body.classList.add("pencilOnly"); $("#pencilBtn").classList.add("on"); }
