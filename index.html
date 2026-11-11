@@ -87,7 +87,6 @@ body.annotating #annTools{display:inline-flex}
 .sheet>canvas.page{display:block;width:960px}
 .sheet canvas.ann{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;touch-action:none}
 body.annotating .sheet canvas.ann{pointer-events:auto;cursor:crosshair}
-body.annotating.pencilOnly .sheet canvas.ann{touch-action:pan-x pan-y}
 body.annotating.tool-eraser .sheet canvas.ann{cursor:cell}
 body.annotating.tool-text .sheet canvas.ann{cursor:text}
 #osmdBox{width:960px;padding:10px 0 30px}
@@ -133,8 +132,8 @@ input[type=range]{accent-color:var(--teal)}
 input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
 #bpmLabel{min-width:118px;font-variant-numeric:tabular-nums}
 #posLabel{font-variant-numeric:tabular-nums;min-width:90px}
-.hand.on.rh{background:var(--rh);border-color:var(--rh)}
-.hand.on.lh{background:var(--lh);border-color:var(--lh)}
+#practiceSeg button[data-h=rh].on{background:var(--rh);border-color:var(--rh)}
+#practiceSeg button[data-h=lh].on{background:var(--lh);border-color:var(--lh)}
 #pianoWrap{padding:0 12px 12px}
 .pianoBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 0 8px}
 .pianoBar .lbl2{font-size:12px;color:var(--muted)}
@@ -169,6 +168,22 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 .legend i.ring{border-radius:50%;background:transparent;border:2px solid var(--muted)}
 .noplay #pianoWrap .needsPiece{opacity:.4;pointer-events:none}
 
+#moreMenu{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:40;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px;width:300px}
+#moreMenu.show{display:block}
+.mSec{display:flex;flex-direction:column;gap:6px;padding:8px;border-bottom:1px solid var(--line)}
+.mSec:last-child{border-bottom:none}
+.mHead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.mRow{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.mSec>button{text-align:left}
+#kb .dim{filter:saturate(.45) brightness(1.12)}
+#kb .w.dim.rh,#kb .w.dim.lh{opacity:.75}
+body.penMode #modeSeg{display:none}
+body.penMode #annTools{display:inline-flex}
+body.penMode .sheet canvas.ann{pointer-events:auto;touch-action:pan-x pan-y}
+body.penMode.fingerDraw .sheet canvas.ann{touch-action:none}
+#fingerDrawBtn{display:none}
+body.penMode #fingerDrawBtn{display:inline-block}
+body.loopPick .sheet canvas.ann{cursor:pointer}
 .notice{background:var(--accent-soft);color:#6b2e13;padding:8px 12px;font-size:13px;display:none}
 .notice.show{display:block}
 .disabledArea{opacity:.4;pointer-events:none}
@@ -196,7 +211,6 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
   <div class="title"><input id="pieceTitle" placeholder="No piece open" disabled></div>
   <span id="saveState" class="muted small"></span>
   <button id="sideBtn" title="Notes and questions">Notes &amp; help</button>
-  <button id="setBtn" title="Settings" style="display:none">Settings</button>
 </header>
 <div class="notice" id="notice"></div>
 <div class="main">
@@ -234,16 +248,37 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
         <span class="sep"></span>
         <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
         <button id="clearBtn">Clear page</button>
-        <button id="pencilBtn" title="Draw with Apple Pencil or a stylus only, and scroll with your finger">Pencil only</button>
+        <button id="fingerDrawBtn" title="Let your finger draw too (for when you don't have a Pencil)">Draw with finger</button>
       </div>
       <span style="flex:1"></span>
       <button id="namesTgl" title="Show the key name above every note" style="display:none">Key names</button>
-      <button id="autoBtn" class="primary" title="Let the app mark up this piece for you" style="display:none">✨ Annotate for me</button>
-      <button id="exportBtn" title="Save the playable score as a MusicXML file" style="display:none">Download MusicXML</button>
-      <div class="grp">
-        <button id="zoomOut" title="Zoom out">−</button>
-        <span id="zoomLbl" class="small muted" style="min-width:38px;text-align:center">100%</span>
-        <button id="zoomIn" title="Zoom in">+</button>
+      <div style="position:relative">
+        <button id="moreBtn" title="More options" aria-haspopup="true">⋯ More</button>
+        <div id="moreMenu" role="menu">
+          <div class="mSec" id="mScore">
+            <div class="mHead">This piece</div>
+            <button id="autoBtn" class="primary" title="Let the app mark up this piece for you" style="display:none">✨ Annotate for me</button>
+            <button id="exportBtn" title="Save the playable score as a MusicXML file" style="display:none">Download MusicXML</button>
+            <div class="mRow"><span>Zoom</span><div class="grp"><button id="zoomOut" title="Zoom out">−</button><span id="zoomLbl" class="small muted" style="min-width:42px;text-align:center">100%</span><button id="zoomIn" title="Zoom in">+</button></div></div>
+          </div>
+          <div class="mSec">
+            <div class="mHead">Playback</div>
+            <div class="mRow"><span>Metronome click</span><button id="metroBtn" title="Metronome click">Click</button></div>
+            <div class="mRow"><span>One bar of clicks first</span><button id="countBtn" title="One bar of clicks before playing">Count-in</button></div>
+            <div class="mRow"><span>Volume</span><input type="range" id="vol" min="0" max="100" value="75" style="width:120px"></div>
+          </div>
+          <div class="mSec">
+            <div class="mHead">Piano</div>
+            <div class="mRow"><span>Show piano</span><button id="kbBtn" class="on" title="Show or hide the piano">Piano</button></div>
+            <div class="mRow"><span>Name every white key</span><button id="namesBtn" title="Label every white key (off shows just the Cs)">Label keys</button></div>
+            <div class="mRow"><span>Keys shown</span><div class="seg" id="rangeSeg"><button data-r="fit" class="on" title="Just the keys this piece uses">Fit</button><button data-r="full" title="All 88 keys">88 keys</button></div></div>
+            <div class="mRow"><span>Size</span><div class="seg" id="sizeSeg"><button data-z="S">S</button><button data-z="M" class="on">M</button><button data-z="L">L</button></div></div>
+          </div>
+          <div class="mSec" id="mApp" style="display:none">
+            <div class="mHead">App</div>
+            <button id="setBtn" title="Settings">Settings and API key</button>
+          </div>
+        </div>
       </div>
     </div>
     <div id="scroller">
@@ -298,27 +333,27 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
       <input type="range" id="tempo" min="25" max="150" value="100" step="5" style="width:110px">
       <button id="faster" title="Faster">+</button>
       <span id="bpmLabel" class="small">–</span>
+      <div class="seg" id="presetSeg">
+        <button data-p="50" title="Half speed">Slow</button>
+        <button data-p="75" title="Three-quarter speed">Learning</button>
+        <button data-p="100" title="Written tempo">Full speed</button>
+      </div>
     </div>
     <span class="sep"></span>
     <div class="grp">
-      <button id="metroBtn" title="Metronome click">Click</button>
-      <button id="countBtn" title="One bar of clicks before playing">Count-in</button>
-    </div>
-    <span class="sep"></span>
-    <div class="grp">
-      <button id="loopBtn" title="Repeat a passage">Loop</button>
-      <label class="small">m.<input class="num" id="loopA" type="number" min="1" value="1"></label>
-      <label class="small">to<input class="num" id="loopB" type="number" min="1" value="4"></label>
+      <button id="loopBtn" title="Repeat a passage: tap the first and last bar">Loop</button>
+      <span id="loopLbl" class="small muted"></span>
+      <input class="num" id="loopA" type="number" min="1" value="1" hidden>
+      <input class="num" id="loopB" type="number" min="1" value="4" hidden>
     </div>
     <span class="sep" id="handsSep"></span>
     <div class="grp" id="hands">
-      <button class="hand rh on" data-staff="0" title="Mute or unmute the top staff">Right hand</button>
-      <button class="hand lh on" data-staff="1" title="Mute or unmute the bottom staff">Left hand</button>
-    </div>
-    <span style="flex:1"></span>
-    <div class="grp">
-      <label class="small muted">Vol <input type="range" id="vol" min="0" max="100" value="75" style="width:70px"></label>
-      <button id="kbBtn" class="on" title="Show or hide the piano">Piano</button>
+      <span class="small muted">Practice:</span>
+      <div class="seg" id="practiceSeg">
+        <button data-h="both" class="on" title="The app plays everything">Both hands</button>
+        <button data-h="rh" title="You play the right hand, the app plays the left">Right hand</button>
+        <button data-h="lh" title="You play the left hand, the app plays the right">Left hand</button>
+      </div>
     </div>
   </div>
   <div id="pianoWrap">
@@ -329,10 +364,6 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
         <button id="hearBtn" class="on" title="Play the notes when stepping">Hear steps</button>
       </div>
       <span class="legend needsPiece"><i style="background:var(--rh)"></i>right hand <i style="background:var(--lh)"></i>left hand <i class="ring"></i>coming next</span>
-      <span style="flex:1"></span>
-      <button id="namesBtn" title="Label every white key (off shows just the Cs)">Label keys</button>
-      <div class="seg" id="rangeSeg"><button data-r="fit" class="on" title="Just the keys this piece uses">Fit</button><button data-r="full" title="All 88 keys">88 keys</button></div>
-      <div class="seg" id="sizeSeg"><button data-z="S">S</button><button data-z="M" class="on">M</button><button data-z="L">L</button></div>
     </div>
     <div id="piano"><div id="kb"></div></div>
   </div>
@@ -370,7 +401,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 "use strict";
 // Home Screen (standalone) mode on iPad/iPhone: leave room under the system's blurred top edge
 try{ if(navigator.standalone || matchMedia("(display-mode: standalone)").matches) document.documentElement.classList.add("standalone"); }catch(e){}
-const APP_VERSION="2026.11.10-5";
+const APP_VERSION="2026.11.10-6";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -435,7 +466,7 @@ const Store={ mode:"memory",
       local: "",
       memory:"Saving isn’t available here, so pieces stay for this visit only." }[this.mode];
     $("#storageNote").textContent=msg; $("#storageNote").style.display=msg?"":"none";
-    if(!window.claude){ $("#setBtn").style.display=""; const k=pref("apikey"); if(k) S.sample=makeApiSample(k); }
+    if(!window.claude){ $("#mApp").style.display=""; const k=pref("apikey"); if(k) S.sample=makeApiSample(k); }
     refreshAskTab();
   },
   col(){ return this.lib.collection("pieces"); },
@@ -621,10 +652,13 @@ async function addFile(file){
       if(!ok) notice(kind==="xml" ? "This score is too large to save, so it will stay for this visit only." : "This file can’t be saved here, so it will stay for this visit only.");
     }catch(e){ notice("Couldn't save the file itself, so it will stay for this visit only."); }
   }
+  const autoRead = kind!=="xml" && !!S.sample;
+  if(autoRead) p.lastView="playable";
   S.pieces.unshift(p);
   savePiece(p, {}, 0);
   renderList();
-  openPiece(p);
+  await openPiece(p);
+  if(autoRead && S.cur===p) $("#goRead")?.click();
 }
 async function getContent(p){
   if(S.cache[p.id]) return S.cache[p.id];
@@ -759,7 +793,8 @@ async function renderPlayable(xml, box, tok){
   const h=sh.getBoundingClientRect().height/(S.scale||1);
   const sfc=await addSurface(sh,"score",ob.offsetHeight);
   try{ sizeStage(); const L=scoreLayout(); if(L){ const out=[]; autoNames(L,out); sfc.nameItems=out; drawSurface(sfc); } }catch(e){ console.warn(e); }
-  ob.addEventListener("click", onScoreClick);
+  try{ refreshLoopBand(); }catch(e){}
+  ob.addEventListener("click", e=>{ if(S.mode==="play") handleScoreTap(e); });
   const tl=S.timeline;
   $("#loopA").value=tl.measNums[0]??1; $("#loopB").value=Math.min((tl.measNums[0]??1)+3, tl.measNums[tl.measNums.length-1]??4);
   if(p.loopA) $("#loopA").value=p.loopA; if(p.loopB) $("#loopB").value=p.loopB;
@@ -816,7 +851,7 @@ function buildTimeline(osmd){
 
 /* click a note in play mode to start there */
 function onScoreClick(e){
-  if(S.mode!=="play"||!S.osmd||!S.timeline) return;
+  if((!S.penMode && S.mode!=="play")||!S.osmd||!S.timeline) return;
   try{
     const O=opensheetmusicdisplay; const gs=S.osmd.GraphicSheet;
     const sp=gs.domToSvg(new O.PointF2D(e.clientX,e.clientY));
@@ -1070,6 +1105,7 @@ function sizeSurface(s){
 function drawSurface(s){
   const ctx=s.canvas.getContext("2d"); ctx.setTransform(s.dpr,0,0,s.dpr,0,0);
   ctx.clearRect(0,0,960,s.h);
+  if(s.band) for(const b of s.band){ ctx.save(); ctx.fillStyle="rgba(47,111,115,.13)"; ctx.strokeStyle="rgba(47,111,115,.55)"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.roundRect?ctx.roundRect(b.x-4,b.y,b.w+8,b.h,8):ctx.rect(b.x-4,b.y,b.w+8,b.h); ctx.fill(); ctx.stroke(); ctx.restore(); }
   if(s.nameItems && S.showNames) for(const it of s.nameItems) drawItem(ctx,it);
   for(const it of s.items){ if(it.auto==="names") continue; drawItem(ctx,it); } // older saved names are replaced by the live labels
   if(s.live) drawItem(ctx,s.live);
@@ -1112,9 +1148,12 @@ function itemHit(it,x,y,r=9){
 function bindSurface(s){
   const c=s.canvas;
   const pt=e=>{ const r=c.getBoundingClientRect(); return [(e.clientX-r.left)*960/r.width, (e.clientY-r.top)*s.h/r.height]; };
+  // keep the Pencil from scrolling the page while it draws
+  const stylus=e=>{ if([...e.touches].some(t=>t.touchType==="stylus")) e.preventDefault(); };
+  c.addEventListener("touchstart",stylus,{passive:false}); c.addEventListener("touchmove",stylus,{passive:false});
   c.addEventListener("pointerdown",e=>{
-    if(S.mode!=="annotate") return;
-    if(e.pointerType==="touch" && document.body.classList.contains("pencilOnly")) return; // finger scrolls, Pencil draws
+    const draw = S.pick ? false : S.penMode ? (e.pointerType==="pen" || (S.fingerDraw && e.pointerType==="touch")) : S.mode==="annotate";
+    if(!draw){ s.tap={x:e.clientX,y:e.clientY,t:Date.now(),id:e.pointerId}; return; }
     if(e.pointerType==="touch"){ S.touchPts=(S.touchPts||0)+1; if(S.touchPts>1){ s.live=null; s.erasing=false; drawSurface(s); return; } }
     e.preventDefault();
     const [x,y]=pt(e);
@@ -1125,7 +1164,8 @@ function bindSurface(s){
     s.live={t:S.tool,c:S.color,p:[+x.toFixed(1),+y.toFixed(1)]};
   });
   c.addEventListener("pointermove",e=>{
-    if(S.mode!=="annotate") return;
+    if(s.tap && s.tap.id===e.pointerId && Math.hypot(e.clientX-s.tap.x,e.clientY-s.tap.y)>10) s.tap=null;
+    if(!s.live && !s.erasing) return;
     if(S.touchPts>1){ if(s.live){ s.live=null; drawSurface(s); } return; } // two fingers = pinch, not drawing
     const [x,y]=pt(e);
     if(s.erasing){ eraseAt(s,x,y); return; }
@@ -1133,7 +1173,10 @@ function bindSurface(s){
     const p=s.live.p; if(Math.hypot(p[p.length-2]-x,p[p.length-1]-y)<1.5) return;
     p.push(+x.toFixed(1),+y.toFixed(1)); drawSurface(s);
   });
-  const lift=e=>{ if(e.pointerType==="touch") S.touchPts=Math.max(0,(S.touchPts||0)-1); };
+  const lift=e=>{
+    if(s.tap && s.tap.id===e.pointerId){ const t=s.tap; s.tap=null; if(e.type==="pointerup" && Date.now()-t.t<600 && s.key==="score") handleScoreTap(e); return; }
+    if(e.pointerType==="touch") S.touchPts=Math.max(0,(S.touchPts||0)-1);
+  };
   c.addEventListener("pointerup",lift); c.addEventListener("pointercancel",lift);
   const end=()=>{
     if(s.erasing){ s.erasing=false; return; }
@@ -1500,19 +1543,88 @@ function updateTransport(){
 }
 function updateBpm(){
   const tl=S.timeline; const pct=+$("#tempo").value;
+  $$("#presetSeg button").forEach(b=>b.classList.toggle("on",+b.dataset.p===pct));
   $("#bpmLabel").textContent= tl? `${Math.round(tl.bpm*pct/100)} bpm (${pct}%)` : `${pct}%`;
 }
 $("#playBtn").onclick=()=>{ if(Player.playing) Player.pauseHere(); else Player.play(); };
 $("#stopBtn").onclick=()=>{ Player.stop(); Player.seek(Player.loop&&Player.region()?Player.region().s:0); $("#scroller").scrollTo({top:0,behavior:"smooth"}); };
 $("#tempo").oninput=()=>{ updateBpm(); };
+$("#presetSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; $("#tempo").value=b.dataset.p; updateBpm(); $("#tempo").onchange(); });
 $("#tempo").onchange=()=>{ if(S.cur) savePiece(S.cur,{tempoPct:+$("#tempo").value},1000); Player.restartIfPlaying(); };
 $("#slower").onclick=()=>{ $("#tempo").value=+$("#tempo").value-5; $("#tempo").onchange(); updateBpm(); };
 $("#faster").onclick=()=>{ $("#tempo").value=+$("#tempo").value+5; $("#tempo").onchange(); updateBpm(); };
 $("#metroBtn").onclick=e=>{ Player.metro=!Player.metro; e.target.classList.toggle("on",Player.metro); Player.restartIfPlaying(); };
 $("#countBtn").onclick=e=>{ Player.countIn=!Player.countIn; e.target.classList.toggle("on",Player.countIn); };
-$("#loopBtn").onclick=e=>{ Player.loop=!Player.loop; e.target.classList.toggle("on",Player.loop); if(Player.loop){ const R=Player.region(); if(R && !Player.playing) Player.seek(R.s); } Player.restartIfPlaying(); };
-["#loopA","#loopB"].forEach(id=>$(id).onchange=()=>{ if(S.cur) savePiece(S.cur,{loopA:+$("#loopA").value,loopB:+$("#loopB").value},1000); if(Player.loop){ if(Player.playing) Player.restartIfPlaying(); else { const R=Player.region(); if(R) Player.seek(R.s); } } });
-$("#hands").addEventListener("click",e=>{ const b=e.target.closest(".hand"); if(!b) return; const i=+b.dataset.staff; Player.muted[i]=!Player.muted[i]; b.classList.toggle("on",!Player.muted[i]); b.title=Player.muted[i]?"Muted: you play this part":"Mute this part to play it yourself"; });
+function measureAtPoint(cx,cy){
+  const L=scoreLayout(); const svg=$("#osmdBox svg"); if(!L||!svg) return null;
+  const r=svg.closest(".sheet").getBoundingClientRect(); const x=(cx-r.left)/S.scale, y=(cy-r.top)/S.scale;
+  let best=null, bd=1e9;
+  for(const b of L.bars){
+    if(x<b.x-2 || x>b.x+b.w+2) continue;
+    const d = y<b.top ? b.top-y : y>b.bot ? y-b.bot : 0;
+    if(d<bd && d<90){ bd=d; best=b; }
+  }
+  return best ? {mi:best.mi, num:best.num} : null;
+}
+function loopBand(lo,hi){
+  const L=scoreLayout(); if(!L) return [];
+  const bs=L.bars.filter(b=>b.num>=lo && b.num<=hi); const lines=new Map();
+  for(const b of bs){ const k=b.line?.PositionAndShape?.AbsolutePosition?.y ?? Math.round(b.top/50); if(!lines.has(k)) lines.set(k,[]); lines.get(k).push(b); }
+  const out=[];
+  for(const g of lines.values()){
+    const x0=Math.min(...g.map(b=>b.x)), x1=Math.max(...g.map(b=>b.x+b.w));
+    const y0=Math.min(...g.map(b=>b.top))-14, y1=Math.max(...g.map(b=>b.bot))+14;
+    out.push({t:"band",x:x0,y:y0,w:x1-x0,h:y1-y0});
+  }
+  return out;
+}
+function refreshLoopBand(){
+  const sf=S.surfaces.find(s=>s.key==="score"); if(!sf) return;
+  const a=+$("#loopA").value, b=+$("#loopB").value;
+  sf.band = S.pick&&S.pick.a!=null ? loopBand(S.pick.a,S.pick.a) : Player.loop ? loopBand(Math.min(a,b),Math.max(a,b)) : null;
+  $("#loopLbl").textContent = Player.loop ? `bars ${Math.min(a,b)}–${Math.max(a,b)}` : "";
+  drawSurface(sf);
+}
+function setLoop(on){
+  Player.loop=on; $("#loopBtn").classList.toggle("on",on);
+  if(on){ const R=Player.region(); if(R && !Player.playing) Player.seek(R.s); }
+  refreshLoopBand(); Player.restartIfPlaying();
+}
+function endPick(){ S.pick=null; document.body.classList.remove("loopPick"); notice(""); refreshLoopBand(); }
+function startPick(){
+  if(!S.timeline) return;
+  S.pick={a:null}; document.body.classList.add("loopPick");
+  const a=S.cur?.loopA, b=S.cur?.loopB;
+  const n=$("#notice");
+  n.innerHTML=`<b>Loop:</b> tap the first bar you want to repeat. <button id="pickCancel" style="margin-left:6px">Cancel</button>${a&&b?` <button id="pickReuse">Use bars ${Math.min(a,b)}–${Math.max(a,b)} again</button>`:""}`;
+  n.classList.add("show");
+  $("#pickCancel").onclick=endPick;
+  if($("#pickReuse")) $("#pickReuse").onclick=()=>{ $("#loopA").value=a; $("#loopB").value=b; endPick(); setLoop(true); };
+}
+function pickTap(e){
+  const m=measureAtPoint(e.clientX,e.clientY); if(!m) return;
+  if(S.pick.a==null){
+    S.pick.a=m.num; refreshLoopBand();
+    $("#notice").firstChild.nextSibling.textContent=` now tap the last bar (bar ${m.num} is the first). `;
+    return;
+  }
+  const a=S.pick.a, b=m.num;
+  $("#loopA").value=Math.min(a,b); $("#loopB").value=Math.max(a,b);
+  if(S.cur) savePiece(S.cur,{loopA:Math.min(a,b),loopB:Math.max(a,b)},800);
+  endPick(); setLoop(true);
+}
+function handleScoreTap(e){ if(S.pick) pickTap(e); else onScoreClick(e); }
+$("#loopBtn").onclick=()=>{ if(S.pick){ endPick(); return; } if(Player.loop) setLoop(false); else startPick(); };
+["#loopA","#loopB"].forEach(id=>$(id).onchange=()=>{ refreshLoopBand(); if(S.cur) savePiece(S.cur,{loopA:+$("#loopA").value,loopB:+$("#loopB").value},1000); if(Player.loop){ if(Player.playing) Player.restartIfPlaying(); else { const R=Player.region(); if(R) Player.seek(R.s); } } });
+// Practice: which hand YOU play. The app plays the other one; your hand's keys stay bright on the piano.
+S.practice="both";
+function setPractice(h){
+  S.practice=h; Player.muted=[h==="rh", h==="lh"];
+  $$("#practiceSeg button").forEach(b=>b.classList.toggle("on",b.dataset.h===h));
+  pref("practice",h);
+  if(!Player.playing && S.timeline) KB.show(Player.uiStep);
+}
+$("#practiceSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPractice(b.dataset.h); });
 $("#kbBtn").onclick=e=>{ const on=$("#pianoWrap").style.display==="none"; $("#pianoWrap").style.display=on?"":"none"; e.target.classList.toggle("on",on); pref("piano",on?"1":"0"); sizeStage(); };
 $("#namesBtn").onclick=e=>{ KB.names=!KB.names; e.target.classList.toggle("on",KB.names); $("#kb").classList.toggle("names",KB.names); pref("kbnames",KB.names?"1":"0"); };
 $("#rangeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; KB.range=b.dataset.r; $$("#rangeSeg button").forEach(x=>x.classList.toggle("on",x===b)); pref("range",KB.range); KB.build(S.timeline); KB.show(Player.uiStep); });
@@ -1522,7 +1634,7 @@ $("#sizeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); 
 $("#stepBack").onclick=()=>Player.step(-1);
 $("#stepFwd").onclick=()=>Player.step(1);
 $("#hearBtn").onclick=e=>{ Player.hear=!Player.hear; e.target.classList.toggle("on",Player.hear); };
-$("#pencilBtn").onclick=e=>{ const on=!document.body.classList.contains("pencilOnly"); document.body.classList.toggle("pencilOnly",on); e.target.classList.toggle("on",on); pref("pencil",on?"1":"0"); };
+$("#fingerDrawBtn").onclick=e=>{ S.fingerDraw=!S.fingerDraw; document.body.classList.toggle("fingerDraw",S.fingerDraw); e.target.classList.toggle("on",S.fingerDraw); pref("fingerdraw",S.fingerDraw?"1":"0"); };
 // tap a key to hear it and see its name
 $("#kb").addEventListener("pointerdown",e=>{
   const k=e.target.closest("[data-m]"); if(!k) return; e.preventDefault();
@@ -1573,9 +1685,10 @@ const KB={ keys:{}, active:new Map(), lit:new Set(), ghosts:new Set(), names:fal
     kb.appendChild(frag);
     kb.classList.toggle("names",this.names);
   },
-  _clr(m){ this.keys[m]?.classList.remove("rh","lh","held"); },
+  _clr(m){ this.keys[m]?.classList.remove("rh","lh","held","dim"); },
+  _dim(hand){ return S.practice!=="both" && (hand?"lh":"rh")!==S.practice; }, // keys the app plays for you
   // during playback: light a key until a given audio time
-  on(m,hand,until){ const k=this.keys[m]; if(!k) return; k.classList.remove("rh","lh","held"); k.classList.add(hand?"lh":"rh"); this.active.set(m,until); },
+  on(m,hand,until){ const k=this.keys[m]; if(!k) return; k.classList.remove("rh","lh","held","dim"); k.classList.add(hand?"lh":"rh"); if(this._dim(hand)) k.classList.add("dim"); this.active.set(m,until); },
   tick(now){ for(const [m,u] of this.active){ if(now>=u){ this._clr(m); this.active.delete(m); } } },
   ghost(step){
     for(const m of this.ghosts) this.keys[m]?.classList.remove("g-rh","g-lh");
@@ -1589,11 +1702,11 @@ const KB={ keys:{}, active:new Map(), lit:new Set(), ghosts:new Set(), names:fal
     this.clear();
     const tl=S.timeline; if(!tl) return;
     const st=tl.steps[i]; if(!st) return;
-    for(const n of st.notes){ const k=this.keys[n.midi]; if(!k) continue; k.classList.add(n.staff>0?"lh":"rh"); this.lit.add(n.midi); }
+    for(const n of st.notes){ const k=this.keys[n.midi]; if(!k) continue; k.classList.add(n.staff>0?"lh":"rh"); if(this._dim(n.staff>0)) k.classList.add("dim"); this.lit.add(n.midi); }
     for(let j=i-1;j>=0 && j>=i-64;j--){
       const pj=tl.steps[j];
       for(const n of pj.notes){
-        if(pj.t+n.dur>st.t+1e-6 && !this.lit.has(n.midi)){ const k=this.keys[n.midi]; if(!k) continue; k.classList.add(n.staff>0?"lh":"rh","held"); this.lit.add(n.midi); }
+        if(pj.t+n.dur>st.t+1e-6 && !this.lit.has(n.midi)){ const k=this.keys[n.midi]; if(!k) continue; k.classList.add(n.staff>0?"lh":"rh","held"); if(this._dim(n.staff>0)) k.classList.add("dim"); this.lit.add(n.midi); }
       }
     }
     this.ghost(tl.steps[i+1]);
@@ -1604,7 +1717,8 @@ setKbSize(pref("kbsize") || (window.innerWidth<700?"S":"M"));
 if(pref("kbnames")!=="0"){ KB.names=true; $("#namesBtn").classList.add("on"); }
 if(pref("range")==="full"){ KB.range="full"; $$("#rangeSeg button").forEach(x=>x.classList.toggle("on",x.dataset.r==="full")); }
 if(pref("piano")==="0"){ $("#pianoWrap").style.display="none"; $("#kbBtn").classList.remove("on"); }
-if(pref("pencil")==="1"){ document.body.classList.add("pencilOnly"); $("#pencilBtn").classList.add("on"); }
+if(pref("fingerdraw")==="1"){ S.fingerDraw=true; document.body.classList.add("fingerDraw"); $("#fingerDrawBtn").classList.add("on"); }
+{ const h=pref("practice"); if(h==="rh"||h==="lh") setPractice(h); }
 KB.build(null);
 
 /* ===================== Ask Claude ===================== */
@@ -1941,6 +2055,9 @@ $("#autoBtn").onclick=async()=>{
 };
 S.showNames = pref("shownames")!=="0";
 $("#namesTgl").onclick=()=>{ S.showNames=!S.showNames; pref("shownames",S.showNames?"1":"0"); $("#namesTgl").classList.toggle("on",S.showNames); const sf=scoreSurface(); if(sf) drawSurface(sf); };
+$("#moreBtn").onclick=e=>{ e.stopPropagation(); $("#moreMenu").classList.toggle("show"); $("#moreBtn").classList.toggle("on",$("#moreMenu").classList.contains("show")); };
+document.addEventListener("click",e=>{ if(!e.target.closest("#moreMenu,#moreBtn")){ $("#moreMenu").classList.remove("show"); $("#moreBtn").classList.remove("on"); } });
+["#autoBtn","#exportBtn","#setBtn"].forEach(id=>$(id).addEventListener("click",()=>{ $("#moreMenu").classList.remove("show"); $("#moreBtn").classList.remove("on"); }));
 $("#autoClose").onclick=()=>$("#autoModal").classList.remove("show");
 function scoreSurface(){ return S.surfaces.find(s=>s.key==="score"); }
 $("#autoRemove").onclick=()=>{
@@ -2002,6 +2119,8 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 
 /* ===================== boot ===================== */
 setMode("play"); document.body.classList.add("tool-pen");
+S.penMode = navigator.maxTouchPoints>1 && (/iPad|iPhone|Android/.test(navigator.userAgent) || navigator.platform==="MacIntel");
+if(S.penMode) document.body.classList.add("penMode");
 updateTransport();
 (async()=>{
   await Store.init();
