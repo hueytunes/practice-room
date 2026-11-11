@@ -42,6 +42,7 @@ h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:650;margin:0}
 .small{font-size:12px}
 
 /* top bar */
+html.standalone header{padding-top:calc(max(env(safe-area-inset-top),24px) + 34px)}
 header{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line);background:var(--panel)}
 header h1{font-size:20px;letter-spacing:-.01em}
 header .title{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px}
@@ -366,7 +367,9 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 
 <script>
 "use strict";
-const APP_VERSION="2026.11.10-1";
+// Home Screen (standalone) mode on iPad/iPhone: leave room under the system's blurred top edge
+try{ if(navigator.standalone || matchMedia("(display-mode: standalone)").matches) document.documentElement.classList.add("standalone"); }catch(e){}
+const APP_VERSION="2026.11.10-2";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1944,7 +1947,13 @@ async function checkForUpdate(){
     const m=(await r.text()).match(/APP_VERSION="([^"]+)"/);
     if(m && m[1]!==APP_VERSION){
       const n=$("#notice"); n.innerHTML='A new version of Practice Room is ready. <button id="updBtn" class="primary" style="margin-left:8px">Update now</button>'; n.classList.add("show");
-      $("#updBtn").onclick=()=>location.replace(location.pathname+"?v="+encodeURIComponent(m[1]));
+      $("#updBtn").onclick=async()=>{
+        $("#updBtn").disabled=true; $("#updBtn").textContent="Updating…";
+        // refresh the saved copy the Home Screen app starts from, not just this one page load
+        const base=location.pathname.replace(/index\.html$/,"");
+        for(const u of [base, base+"index.html", location.pathname]){ try{ await fetch(u,{cache:"reload"}); }catch(e){} }
+        location.replace(base+"?v="+encodeURIComponent(m[1]));
+      };
     }
   }catch(e){}
 }
