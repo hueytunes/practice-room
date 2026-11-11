@@ -152,7 +152,8 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 #kb .rh .nm,#kb .lh .nm,#kb .tap .nm{display:block}
 #kb .held .nm{color:#33302b}
 #kb .tap .nm{color:#33302b}
-#kb .w .cl{position:absolute;left:0;right:0;bottom:10px;text-align:center;font:500 10px "IBM Plex Sans",sans-serif;color:#9b917f;pointer-events:none}
+#kb .w .cl{position:absolute;left:0;right:0;bottom:10px;text-align:center;font:500 10px "IBM Plex Sans",sans-serif;color:#9b917f;pointer-events:none;display:none;white-space:nowrap;letter-spacing:-.02em}
+#kb .w.c .cl{display:block;color:#7d7363;font-weight:600}
 #kb.names .w .cl{display:block}
 #kb .rh .cl,#kb .lh .cl,#kb .tap .cl{display:none}
 #kb .mc::before{content:"";position:absolute;top:8px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#c9a227}
@@ -327,7 +328,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
       </div>
       <span class="legend needsPiece"><i style="background:var(--rh)"></i>right hand <i style="background:var(--lh)"></i>left hand <i class="ring"></i>coming next</span>
       <span style="flex:1"></span>
-      <button id="namesBtn" title="Label every white key">Key names</button>
+      <button id="namesBtn" title="Label every white key (off shows just the Cs)">Key names</button>
       <div class="seg" id="rangeSeg"><button data-r="fit" class="on" title="Just the keys this piece uses">Fit</button><button data-r="full" title="All 88 keys">88 keys</button></div>
       <div class="seg" id="sizeSeg"><button data-z="S">S</button><button data-z="M" class="on">M</button><button data-z="L">L</button></div>
     </div>
@@ -365,7 +366,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 
 <script>
 "use strict";
-const APP_VERSION="2026.11.07-6";
+const APP_VERSION="2026.11.10-1";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1512,9 +1513,9 @@ const KB={ keys:{}, active:new Map(), lit:new Set(), ghosts:new Set(), names:fal
     const W=100/whites.length; const kb=$("#kb"); kb.innerHTML=""; this.keys={}; this.active.clear(); this.lit.clear(); this.ghosts.clear();
     const frag=document.createDocumentFragment();
     whites.forEach((m,i)=>{
-      const d=document.createElement("div"); d.className="w"+(m===60?" mc":""); d.dataset.m=m;
+      const d=document.createElement("div"); d.className="w"+(m===60?" mc":"")+(m%12===0?" c":""); d.dataset.m=m;
       d.style.left=(i*W)+"%"; d.style.width=W+"%";
-      const cl = m%12===0 ? `<span class="cl" style="display:block">C${Math.floor(m/12)-1}</span>` : `<span class="cl" style="display:none">${NOTE_NAMES[m%12]}</span>`;
+      const cl = `<span class="cl">${noteName(m)}</span>`;
       d.innerHTML=`${cl}<span class="nm">${noteName(m)}</span><span class="dot"></span>`;
       frag.appendChild(d); this.keys[m]=d;
     });
@@ -1555,7 +1556,8 @@ const KB={ keys:{}, active:new Map(), lit:new Set(), ghosts:new Set(), names:fal
   },
 };
 setKbSize(pref("kbsize") || (window.innerWidth<700?"S":"M"));
-if(pref("names")==="1"){ KB.names=true; $("#namesBtn").classList.add("on"); }
+// every white key is labeled unless you turn it off
+if(pref("names")!=="0"){ KB.names=true; $("#namesBtn").classList.add("on"); }
 if(pref("range")==="full"){ KB.range="full"; $$("#rangeSeg button").forEach(x=>x.classList.toggle("on",x.dataset.r==="full")); }
 if(pref("piano")==="0"){ $("#pianoWrap").style.display="none"; $("#kbBtn").classList.remove("on"); }
 if(pref("pencil")==="1"){ document.body.classList.add("pencilOnly"); $("#pencilBtn").classList.add("on"); }
