@@ -29,3 +29,7 @@ On this site, there are two ways to make a PDF or photo playable:
 
 - **Your own API key:** tap Settings, paste an Anthropic API key (from console.anthropic.com), and the app can read notes and answer questions here. The key stays in your browser on that device, and usage is billed to your Anthropic account.
 - **The Claude version:** read the notes in the Claude-hosted copy of the app, tap "Download MusicXML," and add the .zip file it saves here (no need to unzip it).
+
+## Credits
+
+Piano sound: [Salamander Grand Piano V3](https://archive.org/details/SalamanderGrandPianoV3) by Alexander Holm, licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The samples were trimmed and re-encoded for the web.

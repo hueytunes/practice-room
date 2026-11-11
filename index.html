@@ -206,6 +206,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
     </div>
     <div id="pieceList"></div>
     <div id="storageNote">Connecting…</div>
+    <div class="small muted" style="padding:0 12px 10px;font-size:11px">Piano sound: <a href="https://archive.org/details/SalamanderGrandPianoV3" style="color:inherit">Salamander Grand Piano</a> by Alexander Holm (CC BY 3.0)</div>
   </aside>
 
   <section id="stage">
@@ -369,7 +370,7 @@ input.num{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:
 "use strict";
 // Home Screen (standalone) mode on iPad/iPhone: leave room under the system's blurred top edge
 try{ if(navigator.standalone || matchMedia("(display-mode: standalone)").matches) document.documentElement.classList.add("standalone"); }catch(e){}
-const APP_VERSION="2026.11.10-3";
+const APP_VERSION="2026.11.10-4";
 /* ===================== helpers ===================== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -1263,12 +1264,45 @@ function audio(){
     const master=ctx.createGain(); master.gain.value=$("#vol").value/100;
     master.connect(comp); comp.connect(ctx.destination);
     Audio_.ctx=ctx; Audio_.master=master;
+    Piano.load();
   }
   if(Audio_.ctx.state==="suspended") Audio_.ctx.resume();
   return Audio_.ctx;
 }
 $("#vol").oninput=e=>{ if(Audio_.master) Audio_.master.gain.value=e.target.value/100; };
+/* Recorded grand piano: Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0).
+   30 notes (every C, D#, F#, A) are pitched to fill in the keys between them. */
+const Piano={ buffers:{}, list:[], state:"idle", ready:null,
+  load(){
+    if(this.state!=="idle") return this.ready;
+    this.state="loading";
+    const ctx=Audio_.ctx; const jobs=[];
+    for(let o=0;o<=8;o++) for(const [n,pc] of [["C",0],["Ds",3],["Fs",6],["A",9]]){
+      const m=(o+1)*12+pc; if(m<21||m>108) continue;
+      jobs.push((async()=>{ try{
+        const r=await fetch("piano/"+n+o+".mp3"); if(!r.ok) return;
+        const ab=await r.arrayBuffer();
+        this.buffers[m]=await new Promise((res,rej)=>{ const p=ctx.decodeAudioData(ab,res,rej); if(p&&p.then) p.then(res,rej); });
+      }catch(e){} })());
+    }
+    this.ready=Promise.all(jobs).then(()=>{ this.list=Object.keys(this.buffers).map(Number).sort((a,b)=>a-b); this.state=this.list.length?"ready":"failed"; });
+    return this.ready;
+  },
+  nearest(m){ let best=null,bd=1e9; for(const k of this.list){ const d=Math.abs(k-m); if(d<bd){ bd=d; best=k; } } return best; },
+  play(midi, when, dur, vel){
+    const ctx=Audio_.ctx; const k=this.nearest(midi); if(k==null) return false;
+    const src=ctx.createBufferSource(); src.buffer=this.buffers[k]; src.playbackRate.value=Math.pow(2,(midi-k)/12);
+    const g=ctx.createGain(); const v=1.3*vel;
+    g.gain.setValueAtTime(v,when);
+    const off=when+Math.max(.1,dur);             // key released: dampers stop the string quickly
+    g.gain.setTargetAtTime(0,off,.09);
+    src.connect(g).connect(Audio_.master);
+    src.start(when); src.stop(off+.8);
+    return true;
+  },
+};
 function playTone(midi, when, dur, vel=1){
+  if(Piano.state==="ready" && Piano.play(midi,when,dur,vel)) return;
   const ctx=Audio_.ctx; const f=440*Math.pow(2,(midi-69)/12);
   const g=ctx.createGain(); const lp=ctx.createBiquadFilter(); lp.type="lowpass";
   lp.frequency.setValueAtTime(Math.min(9000, 1800+f*5), when);
@@ -1331,9 +1365,15 @@ const Player = {
     ev.sort((a,b)=>a.time-b.time);
     return ev;
   },
-  play(){
+  async play(){
     if(!S.timeline||!S.timeline.steps.length) return;
     const ctx=audio();
+    if(Piano.state==="loading"){
+      $("#playBtn").disabled=true; $("#posLabel").textContent="Loading piano…";
+      await Promise.race([Piano.ready, sleep(8000)]);
+      $("#playBtn").disabled=false; updatePos(this.uiStep);
+      if(this.playing) return;
+    }
     const R=this.region(); if(!R){ notice("Those loop measures aren't in this piece."); return; }
     notice("");
     this.R=R; this.events=this.buildEvents(R); this.ptr=0; this.cycle=0;
